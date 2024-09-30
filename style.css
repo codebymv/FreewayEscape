@@ -1,0 +1,444 @@
+body {
+  background: #222;
+  font-family: 'Press Start 2P', cursive;
+  text-shadow: 0 0 10px #FF00FF, 0 0 20px #FF00FF;    
+  font-smooth: never;
+  height: 98vh;
+}
+
+/* UI */
+
+#topUIContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: absolute;
+  top: 5px;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 0 20px;
+  width: 100%;
+}
+
+.topUI {
+  position: absolute;
+  z-index: 1000;
+  transform: translate(-50%, 25px);
+  font-family: 'Press Start 2P', cursive;
+  font-size: 13px; /* Reduced from 15px */
+  letter-spacing: 1px;
+  text-align: center;
+  color: #00ffea; /* Bright cyan base color */
+  text-shadow: 
+    0 0 5px #00ffea,
+    0 0 10px #00ffea,
+    0 0 15px #ff00ff; /* Added magenta glow for contrast */
+}
+
+.topUI::before {
+  display: inline-block;
+  height: 15px; /* Reduced from 17px */
+  padding: 1px 2px;
+  line-height: 17px; /* Reduced from 19px */
+  font-size: 13px; /* Reduced from 17px */
+  background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  text-shadow: none;
+  font-weight: 900;
+  letter-spacing: 0;
+  border-radius: 4px;
+  margin-right: 20px; /* Reduced from 30px */
+  border: 2px solid #ff00ff; /* Magenta border to match glow */
+}
+
+#time {
+  left: 12%; /* Moved slightly to the left */
+  color: #ffff00; /* Bright yellow */
+}
+#time::before {
+  content: "TIME";
+  color: #ff7f00; /* Bright orange */
+}
+
+#score {
+  left: 43%; /* Moved slightly to the left */
+  color: #ff00ff; /* Bright magenta */
+}
+#score::before {
+  content: "SCORE";
+  color: #00ff00; /* Bright green */
+}
+
+#lap {
+  left: 85%; /* Moved to the left to make room for boost meter */
+  width: 40%; /* Reduced width */
+  color: #00ffff; /* Bright cyan */
+}
+#lap::before {
+  content: "LAP";
+  color: #ff0000; /* Bright red */
+}
+
+#tacho {
+  position: absolute;
+  text-align: right;
+  width: 23%;
+  bottom: 5%;
+  z-index: 2000;
+  color: #e62e13;
+  text-shadow: -2px 0 black, 0 2px black, 2px 0 black, 0 -2px black;
+  letter-spacing: 2px;
+  font-size: 23px;
+}
+#tacho::after {
+  content: "km/h";
+  color: #fab453;
+  font-size: 18px;
+  margin-left: 5px;
+}
+
+#volume-bar, #prev-song, #next-song {
+  font-family: 'Press Start 2P', cursive;
+  display: inline-block;  /* Ensure that the buttons are always visible */
+  font-size: 14px; /* Adjust the font size to fit your design */
+  color: #fff; /* Set your desired text color */
+  background-color: #000; /* Example background color */
+  padding: 10px;
+  border: 2px solid #FFD700; /* Retro-style border */
+  text-align: center;
+  text-transform: uppercase; /* Uppercase for arcade-style text */
+  z-index: 1000;
+}
+
+#prev-song, #next-song {
+  background-color: #222; /* Dark background similar to the UI */
+  color: #00ffea; /* Neon blue text color */
+  border: 2px solid #7a7a7a; /* Neon blue border */
+  padding: 10px 20px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2em;
+  text-shadow: 0 0 10px #00ffea, 0 0 20px #00ffea; /* Neon text shadow */
+  cursor: pointer;
+  transition: background-color 0.3s;
+  text-transform: uppercase; /* Arcade-style uppercase text */
+}
+
+
+#volume-bar{
+  display: none;
+}
+
+/* Style for the buttons to make them more arcade-like */
+#prev-song, #next-song {
+  display: inline-block;
+  margin: 0 5px;
+  cursor: pointer;
+}
+
+button {
+  background-color: #000;
+  color: #FFD700;
+  border: 2px solid #FFD700;
+  padding: 10px 20px;
+  font-family: 'Press Start 2P', cursive;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #FFD700;
+  color: #000;
+}
+
+
+/*boost*/
+
+
+#boostText {
+  display: none; /* Hide the Boost Ready text */
+}
+
+
+#boostMeter {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 180px; /* Slightly reduced width */
+  height: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+#boostBarContainer {
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 2px solid #ff7782;
+  border-radius: 10px; /* Rounded corners */
+  position: relative;
+  box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.6); /* Added shadow */
+  overflow: hidden; /* Ensures boost bar stays within the rounded container */
+}
+
+#boostBar {
+  height: 100%;
+  background-color: #ff7782;
+  border-radius: 8px; /* Rounded corners */
+  box-shadow: inset 0px 2px 8px rgba(255, 119, 130, 0.8); /* Inner shadow for depth */
+  transition: width 0.3s ease;
+}
+
+#boostTextOverlay {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: #ffffff;
+  text-shadow: 1px 1px 0 #000000;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  text-align: center;
+}
+
+
+#hud span {
+  font-size: calc(1em + 1vw); /* Dynamic scaling based on viewport width */
+}
+
+#music-controls {
+display: none;
+position: fixed;
+bottom: 50px;
+right: 20px;
+z-index: 10000;
+}
+
+
+
+#music-controls button {
+background-color: #222; /* Dark background similar to the UI */
+color: #00ffea; /* Neon blue text color */
+border: 2px solid #000000; /* Neon blue border */
+padding: 10px 20px;
+font-family: 'Press Start 2P', cursive;
+font-size: 1.2em; /* Increase size to match the HUD */
+text-shadow: 0 0 10px #00ffea, 0 0 20px #00ffea; /* Neon text shadow */
+cursor: pointer;
+transition: background-color 0.3s;
+text-transform: uppercase; /* Arcade-style uppercase text */
+}
+
+#music-controls input[type="range"] {
+width: 150px;
+margin-left: 10px;
+}
+
+#music-controls button:hover {
+background-color: #00ffea;
+color: #222;
+}
+
+
+/*
+road
+*/
+#game {
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #222;
+  user-select: none;
+  transition: opacity 10s;
+  width: 100vw;
+  height: 100vh;
+}
+
+#road {
+  transition: opacity 2s;
+  transition-timing-function: steps(8, end);
+}
+#road * {
+  position: absolute;
+  image-rendering: pixelated;
+}
+#hero {
+  background-repeat: no-repeat;
+  background-position: -110px 0;
+  z-index: 2000;
+  transform: scale(1.4);
+}
+#cloud {
+  background-size: auto 100%;
+  width: 100%;
+  height: 57%;
+}
+
+/*
+home
+*/
+#road {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+#home {
+  position: absolute;
+  color: #fff;
+  width: 100%;
+  height: 100%;
+
+  z-index: 1000; /* need this cause clip-path changes stack context */
+}
+
+#highscore {
+  position: absolute;
+  width: 100%;
+  height: 20%;
+  bottom: 0;
+  column-count: 3;
+  column-fill: auto;
+}
+
+#highscore * {
+  color: #9e95a8;
+  margin: 0 0 6px 27px;
+}
+
+@keyframes colorShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 4em;
+  text-align: center;
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  transform: translate(-50%, -50%);
+  
+  /* Brighter gradient text */
+  background: linear-gradient(
+    45deg, 
+    #FF00FF, #00FFFF, #FFFF00, #FF1493, #FF00FF
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+  /* Brighter pixelated outline */
+  text-shadow: 
+    -2px -2px 0 #df6580,
+    2px -2px 0 #FF00FF,
+    -2px 2px 0 #FF00FF,
+    2px 2px 0 #FF00FF,
+    -4px -4px 0 #00FFFF,
+    4px -4px 0 #00FFFF,
+    -4px 4px 0 #00FFFF,
+    4px 4px 0 #00FFFF;
+  
+  /* Animation */
+  animation: colorShift 10s ease infinite;
+}
+
+/* Enhanced glow effect */
+h1::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  background: linear-gradient(
+    45deg, 
+    #FF00FF, #00FFFF, #FFFF00, #FF1493, #FF00FF
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: blur(15px);
+  opacity: 0.7;
+  animation: colorShift 10s ease infinite;
+}
+#text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.2em;
+  color: #d9bbf3;
+  text-shadow: 0 0 black, 0 2px black, 2px 0 black, 0 0 black;
+}
+
+.blink {
+  animation: blinker 2s steps(4, end) infinite;
+}
+@keyframes blinker {
+  50% {
+    opacity: 0;
+  }
+}
+
+/*
+Guide
+*/
+#controls {
+  color: #868686;
+  font-size: 13px;
+  line-height: 13px;
+  margin: 10px;
+  text-align: center;
+}
+#controls > span {
+  margin-left: 20px;
+}
+#controls > span > span {
+  border: 2px solid #868686;
+  border-radius: 5px;
+  padding: 7px;
+  margin-right: 10px;
+  display: inline-block;
+}
+#controls > span:last-child > span {
+  transform: rotate(90deg);
+}
+
+@media (max-width: 768px) {
+  #game {
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #hud span {
+    font-size: calc(0.8em + 1vw);
+  }
+
+  h1 {
+    font-size: 2em;
+  }
+
+  #controls {
+    font-size: 10px;
+  }
+}
+
+#mobile-controls {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  #mobile-controls {
+    display: flex;
+    justify-content: space-around;
+  }
+}
