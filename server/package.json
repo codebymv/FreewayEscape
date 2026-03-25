@@ -1,0 +1,32 @@
+{
+  "name": "freeway-escape-server",
+  "version": "1.0.0",
+  "description": "Multiplayer racing game server",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "build": "echo 'No build needed for server'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "game",
+    "racing",
+    "server",
+    "websocket",
+    "multiplayer"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "dependencies": {
+    "fastify": "^4.24.0",
+    "@fastify/websocket": "^8.3.0",
+    "@fastify/cors": "^8.4.0",
+    "@fastify/static": "^6.12.0",
+    "uuid": "^9.0.1"
+  }
+} 

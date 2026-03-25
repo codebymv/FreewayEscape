@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Freeway Escape</title>
+    <link rel="icon" href="images/icon.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Press+Start+2P" />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-DjmZKkyy.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BgrsrTEr.css">
+  </head>
+
+  <body translate="no">
+    <div id="game">
+      <div id="road">
+        <div id="cloud"></div>
+        <div id="hero"></div>
+      </div>
+
+      <div id="hud">
+        <span id="score" class="topUI">0</span>
+        <span id="lap" class="topUI">0'00"000</span>
+        <span id="tacho">0</span>
+        <div id="highscore-display" style="position: absolute; top: 60px; left: 12%; color: #ffaa00; font-size: 10px; text-shadow: 0 0 5px #ffaa00;">BEST: <span id="highscore-value">0</span></div>
+        <div id="arcade-timer" style="display: none;">
+          <span id="arcade-timer-value">45</span>
+          <span id="arcade-timer-label">SEC</span>
+        </div>
+        <div id="combo-display" style="display: none;">COMBO: 0 <span class="multiplier">×1</span></div>
+        <div id="boostMeter">
+          <span id="boostText">Boost Ready</span>
+          <div id="boostBarContainer">
+            <div id="boostBar"></div>
+            <div class="boostTextOverlay" id="boostTextOverlay">BOOST</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Crash / recovery overlay -->
+      <div id="crash-overlay" class="crash-overlay" style="display: none;"></div>
+      <div id="crash-text" class="crash-text" style="display: none;">CRASH!</div>
+      <div id="recovery-indicator" class="recovery-indicator" style="display: none;">RECOVERING</div>
+
+      <div id="home">
+        <h1>Freeway Escape</h1>
+        <p id="text"></p>
+        <div id="highscore"></div>
+      </div>
+
+      <!-- Game Over Results Screen -->
+      <div id="results-screen" style="display: none;">
+        <h1 id="results-grade">A</h1>
+        <div id="results-stats">
+          <div class="result-row"><span class="result-label">SCORE</span><span id="result-score" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">SECTORS</span><span id="result-sectors" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">BEST COMBO</span><span id="result-combo" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">HIGH SCORE</span><span id="result-highscore" class="result-value">0</span></div>
+        </div>
+        <p id="results-prompt" class="blink">PRESS C TO CONTINUE</p>
+      </div>
+
+      <!-- Level Select Screen -->
+      <div id="level-select" style="display: none;">
+        <h1>SELECT COURSE</h1>
+        <div id="level-grid">
+          <div class="level-option" data-level="0">
+            <div class="level-preview" style="
+              background-image: url('./assets/tropical-BSs4yywN.png');
+              background-size: cover;
+              background-position: center;
+            "></div>
+            <h3>TROPICAL</h3>
+          </div>
+          <div class="level-option" data-level="1">
+            <div class="level-preview" style="
+              background-image: url('./assets/coastal-doQaopRL.png');
+              background-size: cover;
+              background-position: center;
+            "></div>
+            <h3>COASTAL</h3>
+          </div>
+        </div>
+        <p class="select-instruction">Press ← → to select, C to confirm</p>
+      </div>
+    </div>
+
+    <div id="controls">
+      <span><span>W</span><span>S</span>accelerate</span>
+      <span><span>A</span><span>D</span>move</span>
+      <span><span>Space</span>boost</span>
+      <span><span>M</span>mute</span>
+    </div>
+    <div id="music-controls">
+      <button id="prev-song">Rewind</button>
+      <button id="next-song">Skip</button>
+      <input type="range" id="volume-bar" min="0" max="1" step="0.01" value="1">
+    </div>
+
+    <div id="mobile-controls">
+      <button id="mobile-left">Left</button>
+      <button id="mobile-right">Right</button>
+      <button id="mobile-accelerate">Accelerate</button>
+      <button id="mobile-brake">Brake</button>
+      <button id="mobile-boost">Boost</button>
+    </div>
+
+    <!-- Load game module -->
+  </body>
+</html>

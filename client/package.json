@@ -1,0 +1,25 @@
+{
+  "name": "freeway-escape",
+  "version": "1.0.0",
+  "description": "An outrun-style racing game",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "serve .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "game",
+    "racing",
+    "outrun"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "serve": "^14.2.1",
+    "vite": "^5.0.0"
+  }
+}
