@@ -45,12 +45,6 @@ export function genMap(levelIndex = 0) {
   console.log(`- Segments: ${track.segments.length}`);
   console.log(`- Level theme: ${currentLevel.name}`);
   
-  // Debug: Log all map sections
-  console.log('Map sections:');
-  map.forEach((section, index) => {
-    console.log(`  Section ${index}: type=${section.type}, from=${section.from}, to=${section.to}, special=${section.special ? 'YES' : 'NO'}`);
-  });
-  
   // Store the actual track length for this specific map
   map.trackLength = trackLength;
   map.levelIndex = levelIndex;
