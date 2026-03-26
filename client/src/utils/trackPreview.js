@@ -53,7 +53,8 @@ export function generateTrackPreviewSVG(levelIndex = 0, width = 200, height = 15
         const t = stepProgress * segment.length;
         stepTurn = segment.curve(t) * 0.005; // Much smaller for preview
       } else if (turnAmount !== 0) {
-        stepTurn = turnAmount * Math.sin(stepProgress * Math.PI) * 0.5;
+        // Fast parabolic approximation of Math.sin(stepProgress * Math.PI)
+        stepTurn = turnAmount * (4 * stepProgress * (1 - stepProgress)) * 0.5;
       }
       
       currentAngle += stepTurn;
