@@ -36,6 +36,7 @@ class Game {
     this.levelSelectCooldown = 0; // Prevent immediate key processing
 
     this.lines = [];
+    this.manualAssets = new Set();
     this.cars = [];
     // Toggle to enable/disable AI logic and honking
     this.aiEnabled = true; // ENABLED for near-miss scoring system
@@ -310,6 +311,7 @@ class Game {
     
     // Also ensure lines array is cleared
     this.lines = [];
+    this.manualAssets = new Set();
     
     for (let i = 0; i < constants.N; i++) {
       let line = new Line();
@@ -475,9 +477,8 @@ class Game {
       
       // Prevent asset cleanup while paused by clearing timers
       // Only target manual assets we created
-      const assetElements = this.roadElement.querySelectorAll('div');
-      assetElements.forEach(element => {
-        if (element._isManualAsset && element._cleanupTimer) {
+      this.manualAssets.forEach(element => {
+        if (element._cleanupTimer) {
           clearTimeout(element._cleanupTimer);
           element._cleanupTimer = null;
         }
@@ -497,13 +498,13 @@ class Game {
       
       // Restart asset cleanup timers when resuming
       // Only target manual assets we created
-      const assetElements = this.roadElement.querySelectorAll('div');
-      assetElements.forEach(element => {
-        if (element._isManualAsset && !element._cleanupTimer) {
+      this.manualAssets.forEach(element => {
+        if (!element._cleanupTimer) {
           element._cleanupTimer = setTimeout(() => {
             if (element.parentNode) {
               element.parentNode.removeChild(element);
             }
+            this.manualAssets.delete(element);
           }, 100); // Slightly longer delay after resume
         }
       });
@@ -824,11 +825,16 @@ class Game {
     
     this.roadElement.appendChild(scorePopup);
     
+    // Track as manual asset for pause/resume
+    scorePopup._isManualAsset = true;
+    this.manualAssets.add(scorePopup);
+
     // Remove after animation completes
-    setTimeout(() => {
+    scorePopup._cleanupTimer = setTimeout(() => {
       if (scorePopup.parentNode) {
         scorePopup.parentNode.removeChild(scorePopup);
       }
+      this.manualAssets.delete(scorePopup);
     }, 1200);
   }
 

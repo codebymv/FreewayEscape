@@ -26,5 +26,8 @@
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "jsdom": "^29.0.1"
   }
-} 
+}
