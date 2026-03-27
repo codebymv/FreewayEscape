@@ -1264,48 +1264,73 @@ class Game {
         let bestLane = null;
         let minConflicts = Infinity;
 
-        for (const pickDistance of respawnDistances) {
-          const testPos = (playerSegNorm + pickDistance) % N;
+        // Pre-filter valid test positions and collect nearby cars in a single pass
+        const validTestPositions = [];
+        for (let i = 0; i < respawnDistances.length; i++) {
+          const testPos = (playerSegNorm + respawnDistances[i]) % N;
           // Validate: testPos should be AHEAD of player (circular distance)
           let aheadDist = testPos - playerSegNorm;
           if (aheadDist < -N / 2) aheadDist += N;
           if (aheadDist > N / 2) aheadDist -= N;
           if (aheadDist < minAhead * 0.5) continue; // Skip if wrapped behind player
           if (!this._isSegmentClear(testPos, car.id)) continue; // Enforce min separation
-          const nearbyCars = this.cars.filter((c) => {
-            if (c.id === car.id) return false;
-            const cPos = (Math.floor(c.pos) % N + N) % N;
-            let dist = Math.abs(cPos - testPos);
-            if (dist > N / 2) dist = N - dist;
-            return dist < 25;
-          });
 
-          if (nearbyCars.length < minConflicts) {
-            minConflicts = nearbyCars.length;
-            bestPos = testPos;
-            const th = constants.PLAYER_LANE_THRESHOLD ?? 0.38;
-            const playerCurrentLane =
-              this.playerX > th ? constants.LANE.C
-                : this.playerX < -th ? constants.LANE.A
-                  : constants.LANE.B;
-            // Count cars in each lane within reasonable distance
-            const laneCounts = { [constants.LANE.A]: 0, [constants.LANE.B]: 0, [constants.LANE.C]: 0 };
-            nearbyCars.forEach(c => laneCounts[c.lane]++);
+          validTestPositions.push({
+            pos: testPos,
+            nearbyCars: []
+          });
+        }
+
+        if (validTestPositions.length > 0) {
+          // Single pass over cars to find nearby ones for all valid test positions
+          for (let i = 0; i < this.cars.length; i++) {
+            const c = this.cars[i];
+            if (c.id === car.id) continue;
             
-            // Prefer empty lanes, then lanes with fewest cars
-            const sortedLanes = allLanes.slice().sort((a, b) => laneCounts[a] - laneCounts[b]);
+            const cPos = (Math.floor(c.pos) % N + N) % N;
+
+            for (let j = 0; j < validTestPositions.length; j++) {
+              const tp = validTestPositions[j];
+              let dist = Math.abs(cPos - tp.pos);
+              if (dist > N / 2) dist = N - dist;
+              if (dist < 25) {
+                tp.nearbyCars.push(c);
+              }
+            }
+          }
+
+          for (let i = 0; i < validTestPositions.length; i++) {
+            const { pos: testPos, nearbyCars } = validTestPositions[i];
             
-            // 70% chance to avoid player lane for fair gameplay, 30% chance to challenge
-            if (Math.random() < 0.7) {
-              const nonPlayerLanes = sortedLanes.filter(l => l !== playerCurrentLane);
-              if (nonPlayerLanes.length > 0) {
-                bestLane = nonPlayerLanes[0]; // Pick emptiest non-player lane
+            if (nearbyCars.length < minConflicts) {
+              minConflicts = nearbyCars.length;
+              bestPos = testPos;
+              const th = constants.PLAYER_LANE_THRESHOLD ?? 0.38;
+              const playerCurrentLane =
+                this.playerX > th ? constants.LANE.C
+                  : this.playerX < -th ? constants.LANE.A
+                    : constants.LANE.B;
+              // Count cars in each lane within reasonable distance
+              const laneCounts = { [constants.LANE.A]: 0, [constants.LANE.B]: 0, [constants.LANE.C]: 0 };
+              for (let j = 0; j < nearbyCars.length; j++) {
+                laneCounts[nearbyCars[j].lane]++;
+              }
+
+              // Prefer empty lanes, then lanes with fewest cars
+              const sortedLanes = allLanes.slice().sort((a, b) => laneCounts[a] - laneCounts[b]);
+
+              // 70% chance to avoid player lane for fair gameplay, 30% chance to challenge
+              if (Math.random() < 0.7) {
+                const nonPlayerLanes = sortedLanes.filter(l => l !== playerCurrentLane);
+                if (nonPlayerLanes.length > 0) {
+                  bestLane = nonPlayerLanes[0]; // Pick emptiest non-player lane
+                } else {
+                  bestLane = sortedLanes[0];
+                }
               } else {
+                // Challenge mode: spawn in player's lane or least occupied
                 bestLane = sortedLanes[0];
               }
-            } else {
-              // Challenge mode: spawn in player's lane or least occupied
-              bestLane = sortedLanes[0];
             }
           }
         }
