@@ -102,19 +102,19 @@ class Game extends GameBackup {
       const car = this.cars[i];
       let pos;
       for (let attempts = 0; attempts < 20; attempts++) {
-        const base = baseOffsets[i % baseOffsets.length] + Math.floor(Math.random() * 5) - 2;
+        const base = baseOffsets[i % baseOffsets.length] + this._randomInt(5) - 2;
         pos = ((base % N) + N) % N;
         if (this._isSegmentClear(pos, car.id)) break;
       }
       if (pos === undefined) pos = ((baseOffsets[i % baseOffsets.length] % N) + N) % N;
       car.pos = pos;
       car.lane = this._pickLaneForNewCar(pos);
-      car.type = vehicles[Math.floor(Math.random() * vehicles.length)];
+      car.type = this._pickRandom(vehicles);
       car.passed = false;
       car.trafficWideCleared = false;
       car._trafficCrashApplied = false;
       car.wentBehindAt = null;
-      car.spawnTime = Date.now();
+      car.spawnTime = this.simTimeMs;
     }
 
     console.log(`[ArcadeRun] Respawned ${this.cars.length} cars for new run at positions: ${this.cars.map(c => Math.floor(c.pos)).join(', ')}`);
@@ -200,7 +200,7 @@ class Game extends GameBackup {
     console.log(`[ArcadeRun] Checkpoint #${this.checkpointsPassed} passed!`);
 
     // No traffic for TRAFFIC_GRACE_MS after sector change (like game start)
-    this.trafficGraceUntil = Date.now() + (constants.TRAFFIC_GRACE_MS || 2000);
+    this.trafficGraceUntil = this.simTimeMs + (constants.TRAFFIC_GRACE_MS || 2000);
 
     // +15 seconds
     this.arcadeTimer += constants.ARCADE_CHECKPOINT_BONUS;
@@ -213,6 +213,9 @@ class Game extends GameBackup {
     // Swap environment
     this.nextLevel();
     this.pos = 0;
+    this.lastValidPos = 0;
+    this._collisionPosFrameStart = 0;
+    this.lastDistanceDelta = 0;
     this.finishCrossed = false;
 
     // Escalate traffic: add one more car (up to AI_MAX_CARS)
@@ -256,7 +259,7 @@ class Game extends GameBackup {
     for (let i = 0; i < toAdd; i++) {
       let pos;
       for (let attempts = 0; attempts < 30; attempts++) {
-        const tryPos = (Math.floor(Math.random() * 20) + 42) % N;
+        const tryPos = (this._randomInt(20) + 42) % N;
         if (this._isSegmentClear(tryPos)) { pos = tryPos; break; }
       }
       // Fallback: try staggered positions with min separation (robust for N=50)
@@ -268,9 +271,8 @@ class Game extends GameBackup {
       }
       if (pos === undefined) pos = (42 + i * minSep) % N;
       const lane = this._pickLaneForNewCar(pos);
-      const type = vehicles[Math.floor(Math.random() * vehicles.length)];
-      const newCar = new Car(pos, type, lane);
-      newCar.spawnTime = Date.now(); // Fade-in during grace
+      const type = this._pickRandom(vehicles);
+      const newCar = new Car(pos, type, lane, this.simTimeMs);
       newCar.id = this.carIdCounter++;
       newCar.passed = false;
       newCar.trafficWideCleared = false;
@@ -331,6 +333,7 @@ class Game extends GameBackup {
   _triggerGameOver() {
     if (!this.inGame) return; // already ended
     this.inGame = false;
+    document.body.classList.remove('in-game');
 
     // Hide timer & combo
     if (this.arcadeTimerEl) this.arcadeTimerEl.style.display = 'none';

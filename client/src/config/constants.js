@@ -19,6 +19,11 @@ export const enemy_speed = 42;
 export const hitSpeed = 14;
 export const boostDuration = 3;
 export const boostCooldown = 5;
+export const SIM_RATE = 60;
+export const STEER_ACCEL = 7.5;
+export const STEER_DAMPING = 6.5;
+export const MAX_STEER_VELOCITY = 1.15;
+export const STEER_MIN_GRIP = 0.35;
 export const mapLength = 15000;
 export const lapsPerRace = 1;
 export const totalTime = 90; // Legacy countdown (seconds); Arcade uses ARCADE_START_TIME
@@ -89,10 +94,13 @@ export const CRASH_RECOVERY_MS = 1600;       // Invulnerability after crash so p
 export const TRAFFIC_GRACE_MS = 2000;       // No traffic for 2s after start or checkpoint
 export const DEBUG_DISABLE_RESPAWN = false; // Set true to test if respawn causes snapping
 export const MIN_TRAFFIC_SEGMENT_SEP = 15; // Increased: more spacing between cars for premium feel
+export const TRAFFIC_LANE_WALL_RADIUS = 6; // Prevent all three lanes from being blocked at one reaction point
+export const TRAFFIC_TELEGRAPH_MS = 1200; // Incoming cars glow/fade long enough to be readable
 export const RESPAWN_MIN_AHEAD = 40;        // Spawn closer to horizon (more visible earlier)
 export const RESPAWN_MAX_AHEAD = 55;        // Narrower spawn range for smoother appearance
 export const CAR_HIDE_BEHIND_SEGMENTS = 25; // Hide cars earlier behind player
 export const RESPAWN_DELAY_MS = 3500;      // Faster respawn (3.5s) for more action
+export const TRAFFIC_RESPAWN_INTERVAL_MS = 900; // Min sim-time gap between respawns
+export const CRASH_RESPAWN_GRACE_MS = 1400; // No new traffic respawns during the first recovery beat
 export const PLAYER_LANE_THRESHOLD = 0.38;  // Same as CRASH threshold: playerX < -0.38 = left, > 0.38 = right, else center
 export const CAR_FADEIN_GRACE_MS = 500;    // Collision grace during fade-in (less than visual fade for fairness)
-

@@ -1,5 +1,5 @@
 export class Car {
-  constructor(pos, type, lane) {
+  constructor(pos, type, lane, spawnTime = 0) {
     this.pos = pos;
     this.type = type;
     this.lane = lane;
@@ -7,7 +7,7 @@ export class Car {
     // Cars are STATIONARY in world space - player drives past them
     
     // Visual telegraph: track spawn time for fade-in (reduces snap/pop on respawn/recovery)
-    this.spawnTime = Date.now();
+    this.spawnTime = spawnTime;
     this.fadeInDuration = 700; // 700ms fade-in for smoother appearance
 
     const element = document.createElement("div");
@@ -22,9 +22,9 @@ export class Car {
   }
   
   // Get current opacity based on spawn time (fade-in effect)
-  getOpacity() {
-    const elapsed = Date.now() - this.spawnTime;
+  getOpacity(nowMs = 0) {
+    const elapsed = nowMs - this.spawnTime;
     if (elapsed >= this.fadeInDuration) return 1.0;
-    return Math.min(1.0, elapsed / this.fadeInDuration);
+    return Math.max(0, Math.min(1.0, elapsed / this.fadeInDuration));
   }
 }

@@ -1,7 +1,10 @@
 export const KEYS = {};
+const DEBUG_KEYS = false;
+let controlsInitialized = false;
+let mobileControlsInitialized = false;
 
 export const keyUpdate = (e) => {
-  console.log('Key event:', e.code, e.type); // Debug log
+  if (DEBUG_KEYS) console.log('Key event:', e.code, e.type);
   switch (e.code) {
     case 'ArrowUp':
     case 'KeyW':
@@ -37,7 +40,7 @@ export const keyUpdate = (e) => {
       KEYS[e.code] = e.type === 'keydown';
       break;
   }
-  console.log('KEYS state:', KEYS); // Debug log
+  if (DEBUG_KEYS) console.log('KEYS state:', KEYS);
   // Don't preventDefault for all keys, only game keys
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space'].includes(e.code)) {
     e.preventDefault();
@@ -45,9 +48,45 @@ export const keyUpdate = (e) => {
 };
 
 export const initControls = () => {
+  if (controlsInitialized) return;
+  controlsInitialized = true;
   document.addEventListener('keydown', keyUpdate);
   document.addEventListener('keyup', keyUpdate);
+  initMobileControls();
   console.log('Controls initialized'); // Debug log
+};
+
+const setVirtualKey = (key, isDown) => {
+  KEYS[key] = isDown;
+};
+
+const bindMobileButton = (id, key) => {
+  const button = document.getElementById(id);
+  if (!button) return;
+
+  const setDown = (event) => {
+    event.preventDefault();
+    setVirtualKey(key, true);
+  };
+  const setUp = (event) => {
+    event.preventDefault();
+    setVirtualKey(key, false);
+  };
+
+  button.addEventListener('pointerdown', setDown);
+  button.addEventListener('pointerup', setUp);
+  button.addEventListener('pointercancel', setUp);
+  button.addEventListener('pointerleave', setUp);
+};
+
+const initMobileControls = () => {
+  if (mobileControlsInitialized) return;
+  mobileControlsInitialized = true;
+  bindMobileButton('mobile-left', 'ArrowLeft');
+  bindMobileButton('mobile-right', 'ArrowRight');
+  bindMobileButton('mobile-accelerate', 'ArrowUp');
+  bindMobileButton('mobile-brake', 'ArrowDown');
+  bindMobileButton('mobile-boost', 'Space');
 };
 
 export const toggleMute = () => {

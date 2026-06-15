@@ -6,6 +6,7 @@ import { Audio } from '../classes/Audio.js';
 import { Road } from '../classes/Road.js';
 import { Stopwatch } from '../classes/Stopwatch.js';
 import { KEYS, initControls } from './controls.js';
+import { updateDrivingPhysics } from './drivingPhysics.js';
 import * as constants from '../config/constants.js';
 import { timestamp, accelerate, isCollide, getRand, randomProperty, drawQuad, sleep } from '../utils/helpers.js';
 import { genMap, debugTrackLayout } from './mapGenerator.js';
@@ -59,8 +60,10 @@ class Game {
     this.lastValidPos = 0;
     this.playerX = 0;
     this.speed = 0;
+    this.steerVelocity = 0;
     this.currentLap = 0; // Track completed laps
     this.totalDistance = 0; // Track total distance traveled
+    this.lastDistanceDelta = 0;
     this.scoreVal = 0;
     this.inGame = false;
     this.mapIndex = 0;
@@ -96,6 +99,13 @@ class Game {
     this.crashRecoveryUntil = 0;
     // Traffic grace: no traffic for 1.5s after start or checkpoint (sector change)
     this.trafficGraceUntil = 0;
+    this.postCrashRespawnGraceUntil = 0;
+    this.recoveryVisualActive = false;
+    this.simTimeMs = 0;
+    this.lastTrafficRespawnAt = -Infinity;
+    this.runSeed = 0;
+    this.rngState = 0;
+    this._initRunRng();
     
     // Initialize map with current level
     this.map = genMap(this.currentLevelIndex);
@@ -224,19 +234,56 @@ class Game {
     document.addEventListener('keydown', initAudio, { once: true });
   }
 
+  _seedFromString(value) {
+    let hash = 2166136261;
+    const text = String(value ?? '');
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  _initRunRng() {
+    let seedValue = Date.now();
+    try {
+      const seedParam = new URLSearchParams(window.location.search).get('seed');
+      if (seedParam != null && seedParam !== '') {
+        const parsed = Number(seedParam);
+        seedValue = Number.isFinite(parsed) ? parsed : this._seedFromString(seedParam);
+      }
+    } catch (e) {
+      seedValue = Date.now();
+    }
+
+    this.runSeed = (seedValue >>> 0) || 0x9e3779b9;
+    this.rngState = this.runSeed;
+    console.log(`[RunRNG] seed=${this.runSeed}`);
+  }
+
+  _random() {
+    this.rngState = (this.rngState + 0x6D2B79F5) >>> 0;
+    let t = this.rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  _randomInt(max) {
+    return Math.floor(this._random() * max);
+  }
+
+  _pickRandom(items) {
+    return items[this._randomInt(items.length)];
+  }
+
   initCars() {
     const vehicles = ASSETS.IMAGE.VEHICLES;
     if (!Array.isArray(vehicles) || vehicles.length === 0) {
       console.warn('initCars: No vehicles available');
       return;
     }
-    const getRandomVehicle = () => vehicles[Math.floor(Math.random() * vehicles.length)];
-
-    // Helper function to get a random lane (explicit array to ensure valid values)
-    const getRandomLane = () => {
-      const lanes = [constants.LANE.A, constants.LANE.B, constants.LANE.C];
-      return lanes[Math.floor(Math.random() * lanes.length)];
-    };
+    const getRandomVehicle = () => this._pickRandom(vehicles);
 
     // Calculate number of cars based on level progression
     // Base count + additional cars per level completed
@@ -258,7 +305,6 @@ class Game {
     this.cars = [];
     
     // GRADUATED SPAWNING: Spawn cars with MIN_TRAFFIC_SEGMENT_SEP between them (no "wall" clustering)
-    const allLanes = [constants.LANE.A, constants.LANE.B, constants.LANE.C];
     const minSep = constants.MIN_TRAFFIC_SEGMENT_SEP || 12;
     // Base positions spaced by minSep so we never cluster
     const spawnDistances = [25, 25 + minSep, 25 + minSep * 2, 25 + minSep * 3, 25 + minSep * 4];
@@ -267,7 +313,7 @@ class Game {
       let pos;
       for (let attempts = 0; attempts < 30; attempts++) {
         const baseDistance = spawnDistances[i % spawnDistances.length];
-        const jitter = Math.floor(Math.random() * 5) - 2; // ±2 segments
+        const jitter = this._randomInt(5) - 2; // ±2 segments
         pos = ((baseDistance + jitter) % constants.N + constants.N) % constants.N;
         if (this._isSegmentClear(pos)) break;
       }
@@ -275,7 +321,7 @@ class Game {
       if (pos === undefined) pos = (spawnDistances[i % spawnDistances.length] % constants.N + constants.N) % constants.N;
       
       const lane = this._pickLaneForNewCar(pos);
-      const newCar = new Car(pos, getRandomVehicle(), lane);
+      const newCar = new Car(pos, getRandomVehicle(), lane, this.simTimeMs);
       // Give each car a unique ID
       newCar.id = this.carIdCounter++;
       newCar.passed = false;
@@ -403,7 +449,12 @@ class Game {
 
   reset() {
     this.inGame = false;
+    document.body.classList.remove('in-game');
     this.crashRecoveryUntil = 0;
+    this.postCrashRespawnGraceUntil = 0;
+    this.recoveryVisualActive = false;
+    this.heroElement?.classList.remove('hero-recovery');
+    this.roadElement?.classList.remove('recovery-active');
 
     if (this.isFirstGame) {
       this.isFirstGame = false;
@@ -425,9 +476,14 @@ class Game {
     this.countDown = this.map[this.map.length - 2].to / 130 + 10;
     this.playerX = 0;
     this.speed = 0;
+    this.steerVelocity = 0;
     this.pos = 0;
     this.currentLap = 0; // Reset lap counter
     this.totalDistance = 0; // Reset total distance
+    this.lastDistanceDelta = 0;
+    this.simTimeMs = 0;
+    this.lastTrafficRespawnAt = -Infinity;
+    this.postCrashRespawnGraceUntil = 0;
     this.scoreVal = 0;
     this.mapIndex = 0;
     this.sectionProg = 0;
@@ -558,7 +614,11 @@ class Game {
    * Gives player time to steer away without chain crashes.
    */
   _showCrashFeedback() {
-    this.crashRecoveryUntil = Date.now() + constants.CRASH_RECOVERY_MS;
+    this.crashRecoveryUntil = this.simTimeMs + constants.CRASH_RECOVERY_MS;
+    this.postCrashRespawnGraceUntil = Math.max(
+      this.postCrashRespawnGraceUntil || 0,
+      this.simTimeMs + (constants.CRASH_RESPAWN_GRACE_MS || 1200)
+    );
 
     const overlay = document.getElementById('crash-overlay');
     const text = document.getElementById('crash-text');
@@ -584,9 +644,27 @@ class Game {
     }
     if (recovery) {
       recovery.style.display = 'block';
-      setTimeout(() => {
-        if (recovery) recovery.style.display = 'none';
-      }, constants.CRASH_RECOVERY_MS);
+    }
+    this._updateRecoveryVisuals();
+  }
+
+  _updateRecoveryVisuals() {
+    const active = this.inGame && this.simTimeMs < this.crashRecoveryUntil;
+    if (active !== this.recoveryVisualActive) {
+      this.recoveryVisualActive = active;
+      this.heroElement?.classList.toggle('hero-recovery', active);
+      this.roadElement?.classList.toggle('recovery-active', active);
+    }
+
+    const recovery = document.getElementById('recovery-indicator');
+    if (!recovery) return;
+
+    if (active) {
+      const remaining = Math.max(0, (this.crashRecoveryUntil - this.simTimeMs) / 1000);
+      recovery.textContent = `RECOVER ${remaining.toFixed(1)}`;
+      recovery.style.display = 'block';
+    } else {
+      recovery.style.display = 'none';
     }
   }
 
@@ -623,73 +701,50 @@ class Game {
 
     // Handle keyboard input
     if (this.inGame) {
-      // Get current curve for steering assistance
-      const currentCurve = this.road.getCurve(this.pos);
-      
-      // CURVE-BASED STEERING ASSISTANCE - Helps player follow the road naturally
-      const curveAssistance = currentCurve * 0.00008 * step * Math.abs(this.speed); // Very subtle assistance
-      
-      // Apply curve assistance to player position (helps follow road naturally)
-      if (Math.abs(currentCurve) > 15) { // Only assist on significant curves
-        this.playerX += curveAssistance;
-      }
-      
-      // Steering with much stronger boundary resistance
-      const steerAmount = 0.007 * step * Math.abs(this.speed);
-      
-      if (KEYS.ArrowRight || KEYS.KeyD) {
+      this.simTimeMs += step * 1000;
+      const input = {
+        accelerate: KEYS.ArrowUp || KEYS.KeyW,
+        brake: KEYS.ArrowDown || KEYS.KeyS,
+        left: KEYS.ArrowLeft || KEYS.KeyA,
+        right: KEYS.ArrowRight || KEYS.KeyD,
+        boost: KEYS.Space,
+      };
+
+      if (input.right) {
         this.heroElement.style.backgroundPosition = "-220px 0";
-        // Much stronger resistance near tighter boundaries
-        let rightResistance = 1.0;
-        if (this.playerX > 0.5) rightResistance = 0.2;      // Strong resistance
-        if (this.playerX > 0.7) rightResistance = 0.05;     // Very strong resistance
-        this.playerX += steerAmount * rightResistance;
-      } else if (KEYS.ArrowLeft || KEYS.KeyA) {
+      } else if (input.left) {
         this.heroElement.style.backgroundPosition = "0 0";
-        // Much stronger resistance near tighter boundaries
-        let leftResistance = 1.0;
-        if (this.playerX < -0.5) leftResistance = 0.2;      // Strong resistance
-        if (this.playerX < -0.7) leftResistance = 0.05;     // Very strong resistance
-        this.playerX -= steerAmount * leftResistance;
       } else {
         this.heroElement.style.backgroundPosition = "-110px 0";
       }
 
-      // Acceleration/Braking
-      if (KEYS.ArrowUp || KEYS.KeyW) {
-        this.speed = accelerate(this.speed, this.isBoosting ? constants.boostSpeed : constants.accel, step);
-      } else if (KEYS.ArrowDown || KEYS.KeyS) {
-        this.speed = accelerate(this.speed, constants.breaking, step);
-      } else {
-        this.speed = accelerate(this.speed, constants.decel, step);
-      }
+      const physics = updateDrivingPhysics(
+        {
+          speed: this.speed,
+          playerX: this.playerX,
+          steerVelocity: this.steerVelocity,
+          isBoosting: this.isBoosting,
+          boostTimer: this.boostTimer,
+          boostCooldownTimer: this.boostCooldownTimer,
+        },
+        input,
+        constants,
+        step
+      );
 
-      // Boost
-      if (KEYS.Space && !this.isBoosting && this.boostCooldownTimer <= 0) {
-        this.isBoosting = true;
-        this.boostTimer = constants.boostDuration;
-        this.audio?.play('boost');
-      }
+      this.speed = physics.speed;
+      this.playerX = physics.playerX;
+      this.steerVelocity = physics.steerVelocity;
+      this.isBoosting = physics.isBoosting;
+      this.boostTimer = physics.boostTimer;
+      this.boostCooldownTimer = physics.boostCooldownTimer;
+      this.lastDistanceDelta = physics.distanceDelta;
+      if (physics.boostStarted) this.audio?.play('boost');
 
-      // Update boost timer
-      if (this.isBoosting) {
-        this.boostTimer -= step;
-        if (this.boostTimer <= 0) {
-          this.isBoosting = false;
-          this.boostCooldownTimer = constants.boostCooldown;
-        }
-      } else if (this.boostCooldownTimer > 0) {
-        this.boostCooldownTimer -= step;
-      }
-
-      // Ensure speed doesn't go negative and respect max speed
-      const currentMaxSpeed = this.isBoosting ? constants.boostSpeed : constants.maxSpeed;
-      this.speed = Math.max(0, Math.min(this.speed, currentMaxSpeed));
-      
-      // Validate speed to prevent NaN propagation
-      if (isNaN(this.speed) || this.speed === undefined || this.speed === null) {
+      if (!Number.isFinite(this.speed)) {
         console.warn('Invalid speed detected, resetting to 0');
         this.speed = 0;
+        this.lastDistanceDelta = 0;
       }
 
       // Update boost UI
@@ -701,7 +756,7 @@ class Game {
       const Lc = this._getTrackWrapLength();
       this._collisionPosFrameStart = ((this.pos % Lc) + Lc) % Lc;
       this.lastValidPos = this.pos; // Save for finish-line crossing detection
-      this.pos += this.speed;
+      this.pos += this.lastDistanceDelta;
       const trackLength = this._getTrackWrapLength();
       if (isNaN(trackLength) || trackLength <= 0) {
         const fallbackLength = constants.mapLength;
@@ -759,10 +814,7 @@ class Game {
       this.updateUI(startPos, step);
     }
 
-    // Apply off-road penalty when near boundaries (playerX clamped above when inGame)
-    if (this.inGame && (this.playerX < -0.75 || this.playerX > 0.75)) {
-      this.speed = Math.max(this.speed * 0.96, constants.maxOffSpeed); // More noticeable slowdown
-    }
+    this._updateRecoveryVisuals();
   }
 
   updateBoostUI() {
@@ -1002,7 +1054,6 @@ class Game {
     const N = constants.N;
     const anchor = ((anchorSeg % N) + N) % N;
     const vehicles = ASSETS.IMAGE.VEHICLES;
-    const allLanes = [constants.LANE.A, constants.LANE.B, constants.LANE.C];
     // Spawn well ahead with min separation so car fades in at horizon, no wall clustering
     let pos = null;
     for (const ahead of [constants.drawDistance + 25, constants.drawDistance + 35, constants.drawDistance + 18]) {
@@ -1010,12 +1061,15 @@ class Game {
       if (this._isSegmentClear(testPos, hitCar.id)) { pos = testPos; break; }
     }
     hitCar.pos = pos != null ? pos : (anchor + constants.drawDistance + 25) % N;
-    hitCar.lane = this._pickLaneForNewCar(hitCar.pos);
-    hitCar.type = vehicles[Math.floor(Math.random() * vehicles.length)];
+    hitCar.lane = this._pickLaneForNewCar(hitCar.pos, {
+      avoidPlayerLane: true,
+      excludeCarId: hitCar.id
+    });
+    hitCar.type = this._pickRandom(vehicles);
     hitCar.passed = false;
     hitCar.trafficWideCleared = false;
     hitCar._trafficCrashApplied = false;
-    hitCar.spawnTime = Date.now();
+    hitCar.spawnTime = this.simTimeMs;
 
     // Only mark cars in actual collision rows (playerRow ±1) — prevents chain crash without
     // poisoning cars behind us that we never process (which would block respawn forever)
@@ -1057,68 +1111,80 @@ class Game {
     return true;
   }
 
-  /**
-   * Pick a lane for a new car at targetSegment that avoids roadblocks.
-   * Uses same logic as initCars: prefer lanes not occupied nearby, else least-used.
-   * @param {number} targetSegment - Segment index (0..N-1) for the new car
-   * @returns {number} Lane value (LANE.A, B, or C)
-   */
-  _pickLaneForNewCar(targetSegment) {
+  _getPlayerLane() {
+    const th = constants.PLAYER_LANE_THRESHOLD ?? 0.38;
+    if (this.playerX > th) return constants.LANE.C;
+    if (this.playerX < -th) return constants.LANE.A;
+    return constants.LANE.B;
+  }
+
+  _segmentDistance(a, b) {
     const N = constants.N;
-    const nearbyRadius = 25;
+    let dist = Math.abs((((a % N) + N) % N) - (((b % N) + N) % N));
+    if (dist > N / 2) dist = N - dist;
+    return dist;
+  }
 
-    const cars = this.cars || [];
+  _laneCountsNearSegment(targetSegment, radius, excludeCarId = null) {
+    const counts = {
+      [constants.LANE.A]: 0,
+      [constants.LANE.B]: 0,
+      [constants.LANE.C]: 0
+    };
 
-    if (cars.length === 0) {
-        const r = Math.random();
-        return r < 0.33 ? constants.LANE.A : (r < 0.66 ? constants.LANE.B : constants.LANE.C);
-    }
-
-    let countA = 0;
-    let countB = 0;
-    let countC = 0;
-    let hasNearby = false;
-
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i];
-      const cPos = ((Math.floor(c.pos) % N) + N) % N;
-      let dist = Math.abs(cPos - targetSegment);
-      if (dist > N / 2) dist = N - dist;
-
-      if (dist < nearbyRadius) {
-        hasNearby = true;
-        if (c.lane === constants.LANE.A) countA++;
-        else if (c.lane === constants.LANE.B) countB++;
-        else if (c.lane === constants.LANE.C) countC++;
+    for (const car of this.cars || []) {
+      if (excludeCarId != null && car.id === excludeCarId) continue;
+      const carSeg = ((Math.floor(car.pos) % constants.N) + constants.N) % constants.N;
+      if (this._segmentDistance(carSeg, targetSegment) <= radius && counts[car.lane] != null) {
+        counts[car.lane]++;
       }
     }
 
-    if (!hasNearby) {
-      const r = Math.random();
-      return r < 0.33 ? constants.LANE.A : (r < 0.66 ? constants.LANE.B : constants.LANE.C);
+    return counts;
+  }
+
+  _wouldCreateLaneWall(targetSegment, lane, excludeCarId = null) {
+    const radius = constants.TRAFFIC_LANE_WALL_RADIUS ?? 6;
+    const lanes = new Set([lane]);
+
+    for (const car of this.cars || []) {
+      if (excludeCarId != null && car.id === excludeCarId) continue;
+      const carSeg = ((Math.floor(car.pos) % constants.N) + constants.N) % constants.N;
+      if (this._segmentDistance(carSeg, targetSegment) <= radius) {
+        lanes.add(car.lane);
+      }
     }
 
-    let availableCount = 0;
-    let availableLanes = [];
+    return lanes.has(constants.LANE.A) && lanes.has(constants.LANE.B) && lanes.has(constants.LANE.C);
+  }
 
-    if (countA === 0) availableLanes[availableCount++] = constants.LANE.A;
-    if (countB === 0) availableLanes[availableCount++] = constants.LANE.B;
-    if (countC === 0) availableLanes[availableCount++] = constants.LANE.C;
+  /**
+   * Pick a lane for a new car while avoiding local three-lane walls.
+   * @param {number} targetSegment - Segment index (0..N-1) for the new car
+   * @param {Object} options
+   * @returns {number} Lane value (LANE.A, B, or C)
+   */
+  _pickLaneForNewCar(targetSegment, options = {}) {
+    const allLanes = [constants.LANE.A, constants.LANE.B, constants.LANE.C];
+    const nearbyRadius = options.nearbyRadius ?? 25;
+    const excludeCarId = options.excludeCarId ?? null;
+    const laneCounts = this._laneCountsNearSegment(targetSegment, nearbyRadius, excludeCarId);
 
-    if (availableCount > 0) {
-      return availableLanes[Math.floor(Math.random() * availableCount)];
+    let candidates = allLanes.filter(
+      lane => !this._wouldCreateLaneWall(targetSegment, lane, excludeCarId)
+    );
+    if (candidates.length === 0) candidates = allLanes.slice();
+
+    if (options.avoidPlayerLane) {
+      const playerLane = this._getPlayerLane();
+      const nonPlayer = candidates.filter(lane => lane !== playerLane);
+      if (nonPlayer.length > 0) candidates = nonPlayer;
     }
 
-    const minCount = Math.min(countA, countB, countC);
+    const minCount = Math.min(...candidates.map(lane => laneCounts[lane]));
+    const leastUsed = candidates.filter(lane => laneCounts[lane] === minCount);
 
-    let leastUsedCount = 0;
-    let leastUsedLanes = [];
-
-    if (countA === minCount) leastUsedLanes[leastUsedCount++] = constants.LANE.A;
-    if (countB === minCount) leastUsedLanes[leastUsedCount++] = constants.LANE.B;
-    if (countC === minCount) leastUsedLanes[leastUsedCount++] = constants.LANE.C;
-
-    return leastUsedLanes[Math.floor(Math.random() * leastUsedCount)];
+    return this._pickRandom(leastUsed);
   }
 
   /**
@@ -1139,17 +1205,29 @@ class Game {
   _trafficRowHits(rowSegDraw, rowSegPhysics) {
     if (!this.aiEnabled || !Array.isArray(this.cars) || !this.inGame) return;
     // Recovery grace: no collision during invulnerability so player can steer away
-    if (Date.now() < this.crashRecoveryUntil) return;
+    if (this.simTimeMs < this.crashRecoveryUntil) return;
     // Traffic grace: no traffic for 1.5s after start or checkpoint
-    if (Date.now() < this.trafficGraceUntil) return;
+    if (this.simTimeMs < this.trafficGraceUntil) return;
     const N = constants.N;
     const T = constants.TRAFFIC;
     const rows = new Set();
-    for (const s of [rowSegDraw, rowSegPhysics]) {
+    const addRow = (s) => {
       const x = ((Number(s) % N) + N) % N;
       rows.add(x);
       rows.add((x + 1) % N);
       rows.add((x - 1 + N) % N);
+    };
+    for (const s of [rowSegDraw, rowSegPhysics]) addRow(s);
+    const sweptSegments = Math.min(
+      N,
+      Math.ceil(Math.abs(this.lastDistanceDelta || 0) / constants.segL)
+    );
+    if (sweptSegments > 1) {
+      const direction = (this.lastDistanceDelta || 0) >= 0 ? 1 : -1;
+      const start = ((Number(rowSegPhysics) % N) + N) % N;
+      for (let i = 0; i <= sweptSegments; i++) {
+        addRow(start + i * direction);
+      }
     }
     // Direct lane comparison: playerX matches lane values (-0.75, 0, 0.75)
     // Player at lane center should only crash with cars in SAME lane
@@ -1159,7 +1237,8 @@ class Game {
       const carSeg = ((car.pos | 0) % N + N) % N;
       if (!rows.has(carSeg)) continue;
       // Fade-in grace: skip collision/near-miss for recently spawned cars
-      if (car.spawnTime && Date.now() - car.spawnTime < (constants.CAR_FADEIN_GRACE_MS ?? 500)) continue;
+      const fadeGraceMs = car.fadeInDuration ?? constants.CAR_FADEIN_GRACE_MS ?? 500;
+      if (car.spawnTime != null && this.simTimeMs - car.spawnTime < fadeGraceMs) continue;
       // Direct lane distance: playerX (-0.95 to 0.95) vs car.lane (-0.75, 0, 0.75)
       const dist = Math.abs(this.playerX - car.lane);
       const carPosFloor = carSeg;
@@ -1205,8 +1284,11 @@ class Game {
 
   _trafficRespawn(playerSeg) {
     if (!this.aiEnabled || !Array.isArray(this.cars) || !this.inGame) return;
-    if (Date.now() < this.trafficGraceUntil) return;
+    if (this.simTimeMs < this.trafficGraceUntil) return;
+    if (this.simTimeMs < this.postCrashRespawnGraceUntil) return;
     if (constants.DEBUG_DISABLE_RESPAWN) return;
+    const respawnInterval = constants.TRAFFIC_RESPAWN_INTERVAL_MS ?? 900;
+    if (this.simTimeMs - this.lastTrafficRespawnAt < respawnInterval) return;
     const N = constants.N;
     const playerSegNorm = ((playerSeg % N) + N) % N;
 
@@ -1238,7 +1320,7 @@ class Game {
       // Note: distance calculation handles track wrap-around correctly via normalization above
       const minBehind = -(Math.floor(constants.N / 2) - 1);
       if (distanceFromPlayer <= minBehind) {
-        car.wentBehindAt = car.wentBehindAt || Date.now();
+        if (car.wentBehindAt == null) car.wentBehindAt = this.simTimeMs;
       } else {
         // Reset when car is ahead again (intentional: prevents respawn if car wrapped back ahead)
         car.wentBehindAt = null;
@@ -1246,19 +1328,18 @@ class Game {
       const delayMs = constants.RESPAWN_DELAY_MS ?? 4000;
       const canRespawn =
         distanceFromPlayer <= minBehind &&
-        car.wentBehindAt &&
-        Date.now() - car.wentBehindAt > delayMs &&
-        (!car.spawnTime || Date.now() - car.spawnTime > RESPAWN_COOLDOWN_MS);
+        car.wentBehindAt != null &&
+        this.simTimeMs - car.wentBehindAt > delayMs &&
+        (car.spawnTime == null || this.simTimeMs - car.spawnTime > RESPAWN_COOLDOWN_MS);
 
       if (canRespawn) {
         const vehicles = ASSETS.IMAGE.VEHICLES;
         if (!Array.isArray(vehicles) || vehicles.length === 0) continue;
-        const getRandomVehicle = () => vehicles[Math.floor(Math.random() * vehicles.length)];
-        const allLanes = [constants.LANE.A, constants.LANE.B, constants.LANE.C];
+        const getRandomVehicle = () => this._pickRandom(vehicles);
         // Scale respawn distances to track size (N) to prevent wrap-around bugs on mobile
         const minAhead = Math.min(constants.RESPAWN_MIN_AHEAD ?? 38, Math.floor(N * 0.6));
         const maxAhead = Math.min(constants.RESPAWN_MAX_AHEAD ?? 58, Math.floor(N * 0.8));
-        const baseOffset = minAhead + Math.floor(Math.random() * Math.max(1, maxAhead - minAhead));
+        const baseOffset = minAhead + this._randomInt(Math.max(1, maxAhead - minAhead));
         const respawnDistances = [baseOffset, baseOffset + 6, baseOffset + 12];
         let bestPos = null;
         let bestLane = null;
@@ -1305,32 +1386,10 @@ class Game {
             if (nearbyCars.length < minConflicts) {
               minConflicts = nearbyCars.length;
               bestPos = testPos;
-              const th = constants.PLAYER_LANE_THRESHOLD ?? 0.38;
-              const playerCurrentLane =
-                this.playerX > th ? constants.LANE.C
-                  : this.playerX < -th ? constants.LANE.A
-                    : constants.LANE.B;
-              // Count cars in each lane within reasonable distance
-              const laneCounts = { [constants.LANE.A]: 0, [constants.LANE.B]: 0, [constants.LANE.C]: 0 };
-              for (let j = 0; j < nearbyCars.length; j++) {
-                laneCounts[nearbyCars[j].lane]++;
-              }
-
-              // Prefer empty lanes, then lanes with fewest cars
-              const sortedLanes = allLanes.slice().sort((a, b) => laneCounts[a] - laneCounts[b]);
-
-              // 70% chance to avoid player lane for fair gameplay, 30% chance to challenge
-              if (Math.random() < 0.7) {
-                const nonPlayerLanes = sortedLanes.filter(l => l !== playerCurrentLane);
-                if (nonPlayerLanes.length > 0) {
-                  bestLane = nonPlayerLanes[0]; // Pick emptiest non-player lane
-                } else {
-                  bestLane = sortedLanes[0];
-                }
-              } else {
-                // Challenge mode: spawn in player's lane or least occupied
-                bestLane = sortedLanes[0];
-              }
+              bestLane = this._pickLaneForNewCar(testPos, {
+                avoidPlayerLane: true,
+                excludeCarId: car.id
+              });
             }
           }
         }
@@ -1343,7 +1402,10 @@ class Game {
           if (bestPos === null) bestPos = (playerSegNorm + 48) % N;
         }
         if (bestLane === null) {
-          bestLane = allLanes[Math.floor(Math.random() * allLanes.length)];
+          bestLane = this._pickLaneForNewCar(bestPos, {
+            avoidPlayerLane: true,
+            excludeCarId: car.id
+          });
         }
         car.pos = bestPos;
         car.lane = bestLane;
@@ -1351,8 +1413,9 @@ class Game {
         car.passed = false;
         car.trafficWideCleared = false;
         car._trafficCrashApplied = false;
-        car.spawnTime = Date.now();
+        car.spawnTime = this.simTimeMs;
         car.wentBehindAt = null; // Reset for next cycle
+        this.lastTrafficRespawnAt = this.simTimeMs;
         respawnedThisFrame++;
       }
     }
@@ -1375,7 +1438,7 @@ class Game {
     
     // pos already advanced in update(); use current pos for checkpoint/finish (no double-add)
     const newPos = this.pos;
-    const newTotalDistance = this.totalDistance + this.speed * step;
+    const newTotalDistance = this.totalDistance + (this.lastDistanceDelta || 0);
     
     // Check for checkpoint detection
     const checkpoint = this.road && this.road.checkCheckpoint(newPos, 100);
@@ -1435,22 +1498,6 @@ class Game {
 
     // Boost timer/cooldown decremented in update() — single source of truth
 
-    // Update boost UI
-    const boostMeter = document.getElementById('boost-meter');
-    if (boostMeter) {
-      if (this.isBoosting) {
-        const boostProgress = (this.boostTimer / constants.boostDuration) * 100;
-        boostMeter.style.width = `${boostProgress}%`;
-        boostMeter.style.backgroundColor = '#ff0';
-      } else if (this.boostCooldownTimer > 0) {
-        const cooldownProgress = (1 - this.boostCooldownTimer / constants.boostCooldown) * 100;
-        boostMeter.style.width = `${cooldownProgress}%`;
-        boostMeter.style.backgroundColor = '#f00';
-      } else {
-        boostMeter.style.width = '100%';
-        boostMeter.style.backgroundColor = '#0f0';
-      }
-    }
   }
 
   updateUI(startPos, step) {
@@ -1848,7 +1895,7 @@ class Game {
         }
       }
 
-      if (this.aiEnabled && Date.now() >= this.trafficGraceUntil) {
+      if (this.aiEnabled && this.simTimeMs >= this.trafficGraceUntil) {
         for (let car of this.cars) {
           // Normalize segment index (handles negative; matches _trafficRowHits)
           const carSegment = ((Math.floor(car.pos) % constants.N) + constants.N) % constants.N;
@@ -1887,8 +1934,15 @@ class Game {
             car.element.style.height = destH + 'px';
             car.element.style.zIndex = level + 10000;
             
-            // Apply fade-in effect for visual telegraph
-            car.element.style.opacity = car.getOpacity();
+            // Apply fade-in and a brief horizon glow so new traffic is readable.
+            const opacity = car.getOpacity(this.simTimeMs);
+            const telegraphMs = constants.TRAFFIC_TELEGRAPH_MS ?? car.fadeInDuration ?? 700;
+            const spawnAge = Math.max(0, this.simTimeMs - (car.spawnTime ?? 0));
+            const telegraph = Math.max(0, 1 - spawnAge / telegraphMs);
+            car.element.style.opacity = opacity;
+            car.element.style.filter = telegraph > 0
+              ? `drop-shadow(0 0 ${Math.round(4 + telegraph * 12)}px #00ffff) brightness(${(1 + telegraph * 0.35).toFixed(2)})`
+              : 'none';
             
             car.wasDrawnThisFrame = true;
           }
@@ -2399,10 +2453,20 @@ class Game {
   startGame() {
     console.log('Starting game...');
     this.inGame = true;
+    document.body.classList.add('in-game');
+    this._initRunRng();
+    this.simTimeMs = 0;
     this.crashRecoveryUntil = 0;
-    this.trafficGraceUntil = Date.now() + (constants.TRAFFIC_GRACE_MS || 2000);
+    this.trafficGraceUntil = this.simTimeMs + (constants.TRAFFIC_GRACE_MS || 2000);
+    this.postCrashRespawnGraceUntil = 0;
+    this.recoveryVisualActive = false;
+    this.heroElement?.classList.remove('hero-recovery');
+    this.roadElement?.classList.remove('recovery-active');
+    this.lastTrafficRespawnAt = -Infinity;
     this.speed = 0;
+    this.steerVelocity = 0;
     this.pos = 0;
+    this.lastDistanceDelta = 0;
     this.scoreVal = 0;
     this.mapIndex = 0;
     this.sectionProg = 0;
@@ -2455,7 +2519,7 @@ class Game {
     this.textElement.classList.remove("blink");
     
     // Show music controls and start driving music
-    document.getElementById('music-controls').style.display = 'block';
+    document.getElementById('music-controls').style.display = 'flex';
     if (this.audio) {
       console.log('Starting music transition: fading out menu music...');
       // Start engine sound
