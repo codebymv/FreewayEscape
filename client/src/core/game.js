@@ -1,10 +1,10 @@
-import GameBackup from './game.backup.js';
+import GameEngine from './gameEngine.js';
 import { Car } from '../classes/Car.js';
 import { ASSETS } from '../config/assets.js';
 import * as constants from '../config/constants.js';
 
 /**
- * Arcade Run mode — wraps GameBackup with a proper game loop:
+ * Arcade Run mode — wraps GameEngine with a proper game loop:
  *
  *  - 45-second countdown timer (displayed in HUD)
  *  - Every 30s a checkpoint spawns ahead of the player
@@ -12,15 +12,15 @@ import * as constants from '../config/constants.js';
  *  - Collision: combo breaks (handled in base class)
  *  - Timer hits 0: game over (score screen, menu music)
  */
-class Game extends GameBackup {
+class Game extends GameEngine {
   constructor() {
     super();
     this._initArcadeState();
   }
 
   _initArcadeState() {
-    // Countdown timer (seconds remaining in the run)
-    this.arcadeTimer = constants.ARCADE_START_TIME;
+    // Countdown timer (seconds remaining in the run) — includes any Reserve Tank upgrade.
+    this.arcadeTimer = this.startTimeEff ?? constants.ARCADE_START_TIME;
     // Countdown until next checkpoint spawns
     this.checkpointCountdown = constants.ARCADE_CHECKPOINT_INTERVAL;
     // Whether a checkpoint is currently on the road waiting to be passed
@@ -29,8 +29,18 @@ class Game extends GameBackup {
     this.checkpointPassed = false;
     // How many checkpoints have been passed this run (drives traffic escalation)
     this.checkpointsPassed = 0;
+    this.sectorsCleared = 0;
+    this.crashes = 0;
+    this.nearMisses = 0;
+    this.perfectPasses = 0;
+    this.cleanSectors = 0;
     // Best combo achieved this run (for results screen)
     this.maxCombo = 0;
+    this.selectedCourse = this.getCurrentLevelName?.() || 'COURSE';
+    this.selectedCourseIndex = this.currentLevelIndex || 0;
+    this.selectedDensityKey = constants.normalizeTrafficDensityKey(this.selectedDensityKey);
+    this.selectedDensityPreset = constants.getTrafficDensityPreset(this.selectedDensityKey);
+    this.scoreMultiplier = this._getDensityScoreMultiplier?.() || this.selectedDensityPreset.scoreMultiplier || 1;
     // Cached DOM element for the arcade timer display
     this.arcadeTimerEl = null;
     this.arcadeTimerValueEl = null;
@@ -88,6 +98,20 @@ class Game extends GameBackup {
    * Cars are spread across the visible range so traffic appears immediately.
    */
   _respawnCarsForNewRun() {
+    if (this.trafficWorld) {
+      this._hideAllTrafficElements?.();
+      this.trafficWorld.setVehicles(ASSETS.IMAGE.VEHICLES);
+      this.trafficWorld.config = { ...this.trafficWorld.config, ...this._getTrafficWorldConfig() };
+      this.trafficWorld.reset({
+        simTimeMs: this.simTimeMs,
+        playerDistance: this.totalDistance || 0,
+        targetCount: this._getTrafficTargetCount(),
+      });
+      this.cars = this.trafficWorld.cars;
+      console.log(`[ArcadeRun] TrafficWorld reset with ${this.cars.length} cars`);
+      return;
+    }
+
     if (!this.aiEnabled || !Array.isArray(this.cars)) return;
 
     const vehicles = ASSETS.IMAGE.VEHICLES;
@@ -150,9 +174,12 @@ class Game extends GameBackup {
     // ── 2. Base class: physics, near-miss, respawn, road sync (run first so last frame still simulates)
     super.updateGameState(step, startPos, endPos);
 
-    // ── 3. Decrement arcade countdown timer ───────────────────────────────────
-    this.arcadeTimer -= step;
-    this._updateTimerHUD();
+    // ── 3. Decrement arcade countdown timer (paused during the stage-transition wipe so
+    //        the sector cutscene doesn't cost the player time) ─────────────────────────────
+    if (!(this.isTransitioning && this.isTransitioning())) {
+      this.arcadeTimer -= step;
+      this._updateTimerHUD();
+    }
 
     // ── 4. Game over when timer expires (after physics so death frame is consistent)
     if (this.arcadeTimer <= 0) {
@@ -195,22 +222,48 @@ class Game extends GameBackup {
     console.log('[ArcadeRun] Checkpoint spawned at', Math.round(norm));
   }
 
+  _awardCircuitScore(basePoints, label) {
+    const multiplier = this._getDensityScoreMultiplier?.() || 1;
+    const points = Math.floor(basePoints * multiplier);
+    this.scoreVal += points;
+    if (this.inGame && typeof this.spawnScoreText === 'function') {
+      const labelText = multiplier === 1 ? label : `${label} x${multiplier}`;
+      this.spawnScoreText(points, labelText, constants.halfWidth, constants.height * 0.28, 1);
+    }
+    return points;
+  }
+
   _onCheckpointPassed() {
     this.checkpointsPassed++;
+    this.sectorsCleared++;
     console.log(`[ArcadeRun] Checkpoint #${this.checkpointsPassed} passed!`);
 
-    // No traffic for TRAFFIC_GRACE_MS after sector change (like game start)
+    // Immediate, responsive feedback (timer + score) — the environment swap is deferred to
+    // the middle of the stage-transition wipe so the road rebuild is hidden, not a hard cut.
+    this.arcadeTimer += constants.ARCADE_CHECKPOINT_BONUS;
+    this._flashTimerExtend();
+    this._awardCircuitScore(3000, 'CHECKPOINT');
+    if (!this.crashedThisSector) {
+      this.cleanSectors++;
+      this._awardCircuitScore(constants.CLEAN_SECTOR_BONUS, 'CLEAN SECTOR');
+    }
+
+    if (typeof this._startStageTransition === 'function') {
+      this._startStageTransition({
+        stageNumber: (this.sectorsCleared || 0) + 1,
+        onSwap: () => this._performSectorSwap(),
+      });
+    } else {
+      this._performSectorSwap();
+    }
+  }
+
+  // The environment swap — invoked hidden, mid-wipe, by the stage transition (or directly
+  // as a fallback if the transition mixin is unavailable).
+  _performSectorSwap() {
+    // No traffic for TRAFFIC_GRACE_MS after the sector change (like game start)
     this.trafficGraceUntil = this.simTimeMs + (constants.TRAFFIC_GRACE_MS || 2000);
 
-    // +15 seconds
-    this.arcadeTimer += constants.ARCADE_CHECKPOINT_BONUS;
-    // Flash the timer to signal the extension
-    this._flashTimerExtend();
-
-    // Score bonus
-    this.scoreVal += 3000;
-
-    // Swap environment
     this.nextLevel();
     this.pos = 0;
     this.lastValidPos = 0;
@@ -218,8 +271,8 @@ class Game extends GameBackup {
     this.lastDistanceDelta = 0;
     this.finishCrossed = false;
 
-    // Escalate traffic: add one more car (up to AI_MAX_CARS)
     this._escalateTraffic();
+    this.crashedThisSector = false;
 
     // Reset combo — fresh start for the new sector
     this.combo = 0;
@@ -241,15 +294,21 @@ class Game extends GameBackup {
   }
 
   _escalateTraffic() {
+    if (this.trafficWorld) {
+      this.trafficWorld.config = { ...this.trafficWorld.config, ...this._getTrafficWorldConfig() };
+      const targetCount = this._getTrafficTargetCount();
+      this.trafficWorld.setTargetCount(targetCount);
+      this.cars = this.trafficWorld.cars;
+      console.log(`[ArcadeRun] Traffic target escalated to ${targetCount} cars`);
+      return;
+    }
+
     if (!this.aiEnabled || !Array.isArray(this.cars)) return;
     const vehicles = ASSETS.IMAGE.VEHICLES;
     if (!Array.isArray(vehicles) || vehicles.length === 0) return;
 
     const currentCount = this.cars.length;
-    const targetCount = Math.min(
-      constants.AI_BASE_COUNT + this.checkpointsPassed * constants.AI_CARS_PER_LEVEL,
-      constants.AI_MAX_CARS
-    );
+    const targetCount = this._getTrafficTargetCount();
     if (targetCount <= currentCount) return;
 
     const toAdd = targetCount - currentCount;
@@ -286,6 +345,7 @@ class Game extends GameBackup {
 
   onCollision() {
     this.crashedThisSector = true; // Blocks clean-sector bonus
+    this.crashes = (this.crashes || 0) + 1;
     // Crash costs time — makes collisions genuinely threatening
     this.arcadeTimer -= constants.CRASH_TIME_PENALTY;
     if (this.arcadeTimer < 0) this.arcadeTimer = 0;
@@ -315,6 +375,14 @@ class Game extends GameBackup {
     }
   }
 
+  // Add seconds to the run clock (time pickup). Flashes the timer like a checkpoint extend.
+  _addArcadeTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    this.arcadeTimer += seconds;
+    this._updateTimerHUD();
+    this._flashTimerExtend();
+  }
+
   _flashTimerExtend() {
     if (!this.arcadeTimerEl) return;
     this.arcadeTimerEl.classList.remove('timer-warning', 'timer-critical', 'timer-extend');
@@ -342,6 +410,8 @@ class Game extends GameBackup {
 
     // Final score
     const finalScore = this.scoreVal | 0;
+    // Award meta-progression credits for this run (before building the results screen).
+    const earnedCredits = this._awardRunCredits?.(finalScore, this.cleanSectors || 0) || 0;
     const isNewHighScore = finalScore > this.highScore;
     if (isNewHighScore) {
       this.highScore = finalScore;
@@ -373,9 +443,25 @@ class Game extends GameBackup {
       if (isNewHighScore) gradeEl.textContent += ' ★';
 
       document.getElementById('result-score').textContent = finalScore.toString().padStart(8, '0');
-      document.getElementById('result-sectors').textContent = this.checkpointsPassed.toString();
+      document.getElementById('result-sectors').textContent = (this.sectorsCleared || 0).toString();
+      const densityEl = document.getElementById('result-density');
+      if (densityEl) densityEl.textContent = this.selectedDensityPreset?.label || 'STANDARD';
+      const multiplierEl = document.getElementById('result-multiplier');
+      if (multiplierEl) multiplierEl.textContent = `${this.scoreMultiplier || 1}x`;
+      const crashesEl = document.getElementById('result-crashes');
+      if (crashesEl) crashesEl.textContent = (this.crashes || 0).toString();
       document.getElementById('result-combo').textContent = (this.maxCombo || 0).toString();
+      const driftEl = document.getElementById('result-drift');
+      if (driftEl) driftEl.textContent = `${(this.bestDrift || 0).toFixed(1)}s`;
       document.getElementById('result-highscore').textContent = this.highScore.toString().padStart(8, '0');
+
+      // Meta-progression: credits earned this run + new balance.
+      const earnedEl = document.getElementById('result-earned');
+      if (earnedEl) earnedEl.textContent = `◆ ${earnedCredits.toLocaleString('en-US')}`;
+      const balanceEl = document.getElementById('result-credits');
+      if (balanceEl && this.progression) {
+        balanceEl.textContent = `◆ ${this.progression.credits.toLocaleString('en-US')}`;
+      }
 
       resultsEl.style.display = 'flex';
 
@@ -406,7 +492,7 @@ class Game extends GameBackup {
       });
     }
 
-    console.log(`[ArcadeRun] Game over! Score: ${finalScore}, Grade: ${grade}, Sectors: ${this.checkpointsPassed}, Best combo: ${this.maxCombo || 0}`);
+    console.log(`[ArcadeRun] Game over! Score: ${finalScore}, Grade: ${grade}, Sectors: ${this.sectorsCleared || 0}, Density: ${this.selectedDensityPreset?.label || 'STANDARD'}, Best combo: ${this.maxCombo || 0}`);
   }
 
   _calcGrade(score) {

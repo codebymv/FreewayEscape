@@ -100,7 +100,7 @@ export class Road {
   getHeight(z) {
     const segment = this.findSegment(z);
     if (!segment || !segment.height) return 0;
-    
+
     const localZ = z - segment.startZ;
     return segment.height(localZ);
   }

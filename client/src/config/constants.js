@@ -26,6 +26,24 @@ export const MAX_STEER_VELOCITY = 1.15;
 export const STEER_MIN_GRIP = 0.35;
 export const mapLength = 15000;
 export const lapsPerRace = 1;
+
+// Master elevation visibility. The base pseudo-3D projection barely registers height
+// (even 150-unit hills shift the horizon ~1-2px). This multiplies how strongly any
+// elevation difference from the camera's row reads on screen, so long grades and hills
+// actually show. Affects ALL elevation (segment hills + rolling terrain). 1 = original
+// (near-flat); raise for more dramatic relief. Applied in Line.project().
+export const HEIGHT_PROJECTION_GAIN = 12;
+
+// Rolling terrain layered on the VISUAL road height (simulation.applyMapToLine) so straights
+// aren't dead flat. Built from integer harmonics of the track length (seamless across the
+// loop). Kept off line.rawHeight, so scenery elevation logic ignores it. Low harmonics =
+// long, sustained "mile-stretch" inclines (not frequent bumps). Set amplitude 0 to disable.
+export const TERRAIN_UNDULATION = {
+  amplitude: 55,   // primary roll height (track units; hills are ~150-180)
+  secondary: 22,   // secondary roll for natural, non-repetitive variation
+  harmonic1: 3,    // primary inclines per lap — low = long sweeping grades
+  harmonic2: 7,    // secondary, gentler variation on top
+};
 export const totalTime = 90; // Legacy countdown (seconds); Arcade uses ARCADE_START_TIME
 
 export const LANE = {
@@ -51,10 +69,32 @@ export const NEAR_MISS = {
  *  NICE = 1.20 (wide catch for scoring)
  */
 export const TRAFFIC = {
-  CRASH: 0.38,       // Crash only when deeply inside same lane
-  PERFECT: 0.65,     // Perfect pass: just outside lane boundary
-  CLOSE: 0.90,       // Close pass: adjacent lane, close edge
-  NICE: 1.20,        // Nice pass: any nearby pass
+  // Deterministic lane-distance crash model. Outcome depends only on the CLOSEST lateral gap
+  // (|playerX - car.lane|) the player achieves during a pass — not on frame timing or render
+  // scale — so the same maneuver always gives the same result. CRASH is the gap for a
+  // reference-width car; wider cars get a slightly larger gap (width-aware, and visible).
+  CRASH: 0.38,        // Lateral gap at/under which a reference-width car crashes
+  PERFECT: 0.65,      // Clean pass tiers (lateral gap), all wider than the crash gap
+  CLOSE: 0.90,
+  NICE: 1.20,
+  REFERENCE_CAR_WIDTH: 51,   // effective body px (width * hitbox-width) the base CRASH is tuned for
+  CRASH_WIDTH_SCALE: 0.6,    // how strongly car width shifts the crash gap (0 = ignore, 1 = proportional)
+  IMPACT_BAND_SEGMENTS: 0.5, // longitudinal contact zone (in segments) where a crash can register
+  COLLISION_AHEAD_SEGMENTS: 0.9,  // window (ahead) over which the closest approach is tracked
+  COLLISION_BEHIND_SEGMENTS: 0.7, // window (behind) for closest-approach tracking
+  // Deprecated (old screen-space/swept model): CENTER_CRASH, SWEEP_CRASH, SWEEP_WINDOW_EXTENSION_SEGMENTS
+  CENTER_CRASH: 0.22,
+  SWEEP_CRASH: 0.60,
+  SWEEP_WINDOW_EXTENSION_SEGMENTS: 1.25,
+};
+
+// Tightened to the hero's solid body (the sprite fills its 110x56 frame edge-to-edge, so
+// these are a pure forgiveness inset — slimmer lateral box = more room to squeeze past).
+export const HERO_TRAFFIC_HITBOX = {
+  left: 0.30,
+  top: 0.21,
+  right: 0.70,
+  bottom: 0.79,
 };
 
 export const NEAR_MISS_POINTS = {
@@ -80,9 +120,67 @@ export const COMBO_MULTIPLIERS = {
   20: 8,   // 20+ hits = 8x
 };
 // AI Car Difficulty Scaling
-export const AI_BASE_COUNT = 4;     // Starting traffic count (first sector feels manageable)
+export const AI_BASE_COUNT = 3;     // Starting traffic count (first sector feels manageable)
 export const AI_CARS_PER_LEVEL = 1; // +1 car per checkpoint passed (escalating pressure)
-export const AI_MAX_CARS = 10;      // Max cars - dense traffic at high sector counts
+export const AI_MAX_CARS = 8;       // Max cars - dense traffic at high sector counts
+
+export const DEFAULT_TRAFFIC_DENSITY = 'standard';
+
+export const TRAFFIC_DENSITY_ORDER = ['chill', 'standard', 'dense', 'max'];
+
+export const TRAFFIC_DENSITY_PRESETS = {
+  chill: {
+    key: 'chill',
+    label: 'CHILL',
+    baseCars: 2,
+    carsPerSector: 1,
+    maxCars: 5,
+    spacingMultiplier: 1.25,
+    speedMultiplier: 0.92,
+    scoreMultiplier: 0.75,
+  },
+  standard: {
+    key: 'standard',
+    label: 'STANDARD',
+    baseCars: 3,
+    carsPerSector: 1,
+    maxCars: 8,
+    spacingMultiplier: 1,
+    speedMultiplier: 1,
+    scoreMultiplier: 1,
+  },
+  dense: {
+    key: 'dense',
+    label: 'DENSE',
+    baseCars: 4,
+    carsPerSector: 1,
+    maxCars: 10,
+    spacingMultiplier: 0.9,
+    speedMultiplier: 1.05,
+    scoreMultiplier: 1.25,
+  },
+  max: {
+    key: 'max',
+    label: 'RUSH HOUR',
+    baseCars: 5,
+    carsPerSector: 1,
+    maxCars: 11,
+    spacingMultiplier: 0.84,
+    speedMultiplier: 1.08,
+    scoreMultiplier: 1.5,
+  },
+};
+
+export function normalizeTrafficDensityKey(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'maxrisk' || raw === 'max-risk' || raw === 'max_risk') return 'max';
+  if (TRAFFIC_DENSITY_PRESETS[raw]) return raw;
+  return DEFAULT_TRAFFIC_DENSITY;
+}
+
+export function getTrafficDensityPreset(value) {
+  return TRAFFIC_DENSITY_PRESETS[normalizeTrafficDensityKey(value)];
+}
 
 // Arcade Run Mode
 export const ARCADE_START_TIME = 45;         // Starting countdown in seconds

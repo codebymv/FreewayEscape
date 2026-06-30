@@ -13,7 +13,10 @@
     "build:server": "cd server && npm run build",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
     "test:driving": "node scripts/driving-physics-smoke.mjs",
-    "test": "npm run test:driving"
+    "test:traffic": "node scripts/traffic-flow-smoke.mjs",
+    "test:track-shape": "node scripts/track-shape-smoke.mjs",
+    "test:hitbox": "node scripts/hitbox-smoke.mjs",
+    "test": "npm run test:driving && npm run test:traffic && npm run test:track-shape && npm run test:hitbox"
   },
   "keywords": [
     "game",

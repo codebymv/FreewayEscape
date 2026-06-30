@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "start": "serve .",
     "test:driving": "node ../scripts/driving-physics-smoke.mjs",
-    "test": "npm run test:driving"
+    "test:traffic": "node ../scripts/traffic-flow-smoke.mjs",
+    "test:track-shape": "node ../scripts/track-shape-smoke.mjs",
+    "test:hitbox": "node ../scripts/hitbox-smoke.mjs",
+    "test:progression": "node ../scripts/progression-smoke.mjs",
+    "test": "npm run test:driving && npm run test:traffic && npm run test:track-shape && npm run test:hitbox && npm run test:progression"
   },
   "keywords": [
     "game",

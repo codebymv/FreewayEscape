@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" shape-rendering="crispEdges">
+  <!-- talus base -->
+  <polygon points="14,120 186,120 168,84 32,84" fill="#8a4a2a"/>
+  <!-- mesa body -->
+  <polygon points="32,86 168,86 160,44 40,44" fill="#a85d34"/>
+  <!-- flat cap -->
+  <rect x="36" y="36" width="128" height="10" fill="#bf6e3e"/>
+  <!-- strata lines -->
+  <g stroke="#8a4a2a" stroke-width="2" opacity="0.7">
+    <line x1="40" y1="58" x2="160" y2="58"/>
+    <line x1="38" y1="70" x2="162" y2="70"/>
+  </g>
+  <!-- shadow side -->
+  <polygon points="120,44 160,44 168,86 132,86" fill="#90492a" opacity="0.5"/>
+</svg>

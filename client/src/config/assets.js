@@ -20,59 +20,70 @@ export const BASE_ASSETS = {
         src: "images/vehicles/vehicle-0/right-0.png",
         width: 88,  // Increased from 50 (1.76x scale)
         height: 63, // Increased from 36 (1.75x scale)
+        hitbox: { left: 0.246, top: 0.20, right: 0.801, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-1/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.246, top: 0.20, right: 0.801, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-2/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.246, top: 0.20, right: 0.801, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-3/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.237, top: 0.20, right: 0.721, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-4/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.237, top: 0.20, right: 0.721, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-5/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.356, top: 0.18, right: 0.907, bottom: 0.91 },
       },
       {
         src: "images/vehicles/vehicle-6/right-0.png",
         width: 100, // Increased from 65 (trucks slightly larger)
         height: 72,  // Increased from 46
         isTruck: true,
+        hitbox: { left: 0.245, top: 0.18, right: 0.755, bottom: 0.92 },
       },
       {
         src: "images/vehicles/vehicle-7/right-0.png",
         width: 100,
         height: 72,
         isTruck: true,
+        hitbox: { left: 0.245, top: 0.18, right: 0.755, bottom: 0.92 },
       },
       {
         src: "images/vehicles/vehicle-8/right-0.png",
         width: 100,
         height: 72,
         isTruck: true,
+        hitbox: { left: 0.245, top: 0.18, right: 0.755, bottom: 0.92 },
       },
       {
         src: "images/vehicles/vehicle-9/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.225, top: 0.20, right: 0.775, bottom: 0.90 },
       },
       {
         src: "images/vehicles/vehicle-10/right-0.png",
         width: 88,
         height: 63,
+        hitbox: { left: 0.225, top: 0.20, right: 0.775, bottom: 0.90 },
       }
     ],
     FINISH: {
@@ -117,10 +128,10 @@ export const BASE_ASSETS = {
     engine: "audio/engine.wav",
     honk: "audio/honk.mp3",
     beep: "https://s3-us-west-2.amazonaws.com/s.cdpn.io/155629/beep.wav",
-    // Near-miss scoring sound effects - premium audio feedback
-    success_perfect: "audio/overdrive.mp3", // Dramatic swell for PERFECT near-miss
-    success_close: "audio/insight.mp3",     // Clear chime for CLOSE near-miss
-    success_nice: "audio/flutter.mp3",      // Soft affirm for NICE near-miss
+    // Near-miss scoring sound effects. Keep these short; long music tracks are blocked in Audio.play().
+    success_perfect: "audio/boost_ready.mp3",
+    success_close: "audio/boost_ready.mp3",
+    success_nice: "audio/boost_ready.mp3",
   },
 };
 

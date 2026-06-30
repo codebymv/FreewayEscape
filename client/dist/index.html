@@ -6,8 +6,8 @@
     <link rel="icon" href="images/icon.png">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Press+Start+2P" />
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-DOT8aDok.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-tyqLxb3x.css">
+    <script type="module" crossorigin src="./assets/index-F_CcOjDu.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-13rzj1wN.css">
   </head>
 
   <body translate="no">
@@ -27,6 +27,8 @@
           <span id="arcade-timer-label">SEC</span>
         </div>
         <div id="combo-display" style="display: none;">COMBO: 0 <span class="multiplier">×1</span></div>
+        <div id="shield-indicator" style="display: none;">🛡 SHIELD</div>
+        <div id="drift-meter" style="display: none;">DRIFT <span class="drift-mult">×1.0</span> <span class="drift-pts">0</span></div>
         <div id="boostMeter">
           <span id="boostText">Boost Ready</span>
           <div id="boostBarContainer">
@@ -53,11 +55,20 @@
         <div id="results-stats">
           <div class="result-row"><span class="result-label">SCORE</span><span id="result-score" class="result-value">0</span></div>
           <div class="result-row"><span class="result-label">SECTORS</span><span id="result-sectors" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">DENSITY</span><span id="result-density" class="result-value">STANDARD</span></div>
+          <div class="result-row"><span class="result-label">MULTIPLIER</span><span id="result-multiplier" class="result-value">1x</span></div>
+          <div class="result-row"><span class="result-label">CRASHES</span><span id="result-crashes" class="result-value">0</span></div>
           <div class="result-row"><span class="result-label">BEST COMBO</span><span id="result-combo" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">BEST DRIFT</span><span id="result-drift" class="result-value">0.0s</span></div>
           <div class="result-row"><span class="result-label">HIGH SCORE</span><span id="result-highscore" class="result-value">0</span></div>
+          <div class="result-row result-row-earned"><span class="result-label">EARNED</span><span id="result-earned" class="result-value">◆ 0</span></div>
+          <div class="result-row"><span class="result-label">CREDITS</span><span id="result-credits" class="result-value">◆ 0</span></div>
         </div>
         <p id="results-prompt" class="blink">PRESS C TO CONTINUE</p>
       </div>
+
+      <!-- Garage / Upgrade Shop -->
+      <div id="garage" style="display: none;"></div>
 
       <!-- Level Select Screen -->
       <div id="level-select" style="display: none;">
@@ -79,8 +90,41 @@
             "></div>
             <h3>COASTAL</h3>
           </div>
+          <div class="level-option" data-level="2">
+            <div class="level-preview" style="
+              background-image: url(&quot;data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20500%20460'%20shape-rendering='crispEdges'%3e%3c!--%20State%20of%20Arizona%20(transparent%20bg,%20light-blue%20fill%20to%20match%20Florida/California).%20North%20+%20east%20borders%20are%20straight%20with%20light%20pixel%20texture;%20the%20west%20side%20is%20the%20stair-stepped%20Colorado%20River,%20meeting%20the%20angled%20south%20(Gadsden)%20border%20at%20Yuma%20(SW).%20--%3e%3cpolygon%20fill='%2353aedd'%20points='%20128,96%20150,94%20180,95%20210,93%20240,94%20270,93%20300,94%20330,93%20360,94%20390,92%20391,130%20389,170%20391,210%20389,250%20391,290%20389,330%20391,370%20390,410%20390,420%20350,420%20312,421%20312,432%20268,432%20232,433%20224,433%20224,420%20212,418%20212,405%20200,403%20200,390%20189,388%20189,375%20178,373%20178,360%20167,358%20167,345%20157,343%20157,330%20147,328%20147,315%20138,313%20138,300%20130,298%20130,270%20133,250%20129,225%20131,200%20126,180%20130,160%20128,135%20131,115%20128,96'%20/%3e%3c!--%20Location%20marker:%20southern%20Arizona%20(Tucson%20region)%20--%3e%3crect%20x='282'%20y='368'%20width='22'%20height='22'%20fill='%23f3df1b'%20/%3e%3c/svg%3e&quot;);
+              background-size: cover;
+              background-position: center;
+            "></div>
+            <h3>DESERT</h3>
+          </div>
         </div>
-        <p class="select-instruction">Press ← → to select, C to confirm</p>
+        <div id="density-select">
+          <h2>TRAFFIC</h2>
+          <div id="density-options">
+            <button class="density-option" data-density="chill" type="button">
+              <span class="density-name">CHILL</span>
+              <span class="density-meta">0.75x SCORE</span>
+            </button>
+            <button class="density-option selected" data-density="standard" type="button">
+              <span class="density-name">STANDARD</span>
+              <span class="density-meta">1.00x SCORE</span>
+            </button>
+            <button class="density-option" data-density="dense" type="button">
+              <span class="density-name">DENSE</span>
+              <span class="density-meta">1.25x SCORE</span>
+            </button>
+            <button class="density-option" data-density="max" type="button">
+              <span class="density-name">RUSH HOUR</span>
+              <span class="density-meta">1.50x SCORE</span>
+            </button>
+          </div>
+        </div>
+        <div id="level-select-footer">
+          <div id="level-select-credits">◆ <span id="level-select-credits-value">0</span></div>
+          <button id="garage-open-btn" type="button">GARAGE</button>
+        </div>
+        <p class="select-instruction">LEFT/RIGHT course, UP/DOWN traffic, C/ENTER confirm, G garage</p>
       </div>
     </div>
 

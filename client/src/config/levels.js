@@ -97,13 +97,55 @@ export const LEVELS = {
       // }
       // Right side (ocean side) intentionally left empty for ocean view
     }
+  },
+
+  // Level 3: Southern Arizona desert / canyon run
+  DESERT: {
+    id: 'desert',
+    name: 'Sonoran Canyon',
+
+    sky: [
+      'images/desert_sky_1.png',  // Day
+      'images/desert_sky_2.png',  // Dusk
+      'images/desert_sky_3.png'   // Night
+    ],
+
+    colors: {
+      TAR: ["#3a3631", "#2a2722"],         // Warm dark asphalt
+      RUMBLE: ["#FFFF00", "#FFFFFF"],       // Yellow/White lane markers
+      // Same sandy ground both sides — a desert reads symmetric; the red-rock comes from
+      // the mesa sprites and sky, not a hard left/right color split. The two shades are the
+      // per-segment depth stripe, not a left/right difference.
+      GRASS: ["#c8894e", "#b5763c"],        // Sandy desert (right side)
+      GRASS_LEFT: ["#c8894e", "#b5763c"],   // Match right side — no center seam
+      BEACH: ["#e0b87f", "#d4a96a"],        // Pale sand (right transition)
+      SIDEWALK: ["#b07a4a", "#9c6a3e"],     // Dirt shoulder (left transition)
+      SIDEWALK_WHITE: ["#e8d8b8", "#dccaa0"],
+    },
+
+    scenery: {
+      // Mesas in the far background (reuse mountain art, recolor handled in renderer)
+      mountains: {
+        src: "images/grassy_mountain.png",
+        width: 460,
+        height: 150,
+        spacing: 16,
+        sides: [-4.2]
+      }
+    },
+
+    music: {
+      driving: 'audio/menu.mp3',
+      menu: 'audio/menu.mp3'
+    }
   }
 };
 
 // Level progression system
 export const LEVEL_PROGRESSION = [
   'tropical',
-  'coastal'
+  'coastal',
+  'desert'
 ];
 
 // Helper to get current level config

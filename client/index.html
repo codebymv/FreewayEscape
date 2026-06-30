@@ -26,6 +26,8 @@
           <span id="arcade-timer-label">SEC</span>
         </div>
         <div id="combo-display" style="display: none;">COMBO: 0 <span class="multiplier">×1</span></div>
+        <div id="shield-indicator" style="display: none;">🛡 SHIELD</div>
+        <div id="drift-meter" style="display: none;">DRIFT <span class="drift-mult">×1.0</span> <span class="drift-pts">0</span></div>
         <div id="boostMeter">
           <span id="boostText">Boost Ready</span>
           <div id="boostBarContainer">
@@ -52,11 +54,20 @@
         <div id="results-stats">
           <div class="result-row"><span class="result-label">SCORE</span><span id="result-score" class="result-value">0</span></div>
           <div class="result-row"><span class="result-label">SECTORS</span><span id="result-sectors" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">DENSITY</span><span id="result-density" class="result-value">STANDARD</span></div>
+          <div class="result-row"><span class="result-label">MULTIPLIER</span><span id="result-multiplier" class="result-value">1x</span></div>
+          <div class="result-row"><span class="result-label">CRASHES</span><span id="result-crashes" class="result-value">0</span></div>
           <div class="result-row"><span class="result-label">BEST COMBO</span><span id="result-combo" class="result-value">0</span></div>
+          <div class="result-row"><span class="result-label">BEST DRIFT</span><span id="result-drift" class="result-value">0.0s</span></div>
           <div class="result-row"><span class="result-label">HIGH SCORE</span><span id="result-highscore" class="result-value">0</span></div>
+          <div class="result-row result-row-earned"><span class="result-label">EARNED</span><span id="result-earned" class="result-value">◆ 0</span></div>
+          <div class="result-row"><span class="result-label">CREDITS</span><span id="result-credits" class="result-value">◆ 0</span></div>
         </div>
         <p id="results-prompt" class="blink">PRESS C TO CONTINUE</p>
       </div>
+
+      <!-- Garage / Upgrade Shop -->
+      <div id="garage" style="display: none;"></div>
 
       <!-- Level Select Screen -->
       <div id="level-select" style="display: none;">
@@ -78,8 +89,41 @@
             "></div>
             <h3>COASTAL</h3>
           </div>
+          <div class="level-option" data-level="2">
+            <div class="level-preview" style="
+              background-image: url('assets/images/desert.svg');
+              background-size: cover;
+              background-position: center;
+            "></div>
+            <h3>DESERT</h3>
+          </div>
         </div>
-        <p class="select-instruction">Press ← → to select, C to confirm</p>
+        <div id="density-select">
+          <h2>TRAFFIC</h2>
+          <div id="density-options">
+            <button class="density-option" data-density="chill" type="button">
+              <span class="density-name">CHILL</span>
+              <span class="density-meta">0.75x SCORE</span>
+            </button>
+            <button class="density-option selected" data-density="standard" type="button">
+              <span class="density-name">STANDARD</span>
+              <span class="density-meta">1.00x SCORE</span>
+            </button>
+            <button class="density-option" data-density="dense" type="button">
+              <span class="density-name">DENSE</span>
+              <span class="density-meta">1.25x SCORE</span>
+            </button>
+            <button class="density-option" data-density="max" type="button">
+              <span class="density-name">RUSH HOUR</span>
+              <span class="density-meta">1.50x SCORE</span>
+            </button>
+          </div>
+        </div>
+        <div id="level-select-footer">
+          <div id="level-select-credits">◆ <span id="level-select-credits-value">0</span></div>
+          <button id="garage-open-btn" type="button">GARAGE</button>
+        </div>
+        <p class="select-instruction">LEFT/RIGHT course, UP/DOWN traffic, C/ENTER confirm, G garage</p>
       </div>
     </div>
 

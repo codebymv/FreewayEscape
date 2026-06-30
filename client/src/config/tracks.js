@@ -1,7 +1,15 @@
-// Predefined track layouts for each level
-// Each track is defined as a series of segments with specific curves and elevations
+// Live track authoring uses segment functions: each segment defines a smooth
+// curve and elevation profile over its local distance.
 
-console.log('TRACKS.JS LOADED - Testing curve functions...');
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const smootherStep = (value) => {
+  const t = clamp01(value);
+  return t * t * t * (t * (t * 6 - 15) + 10);
+};
+const smoothPulse = (value) => {
+  const s = Math.sin(clamp01(value) * Math.PI);
+  return s * s;
+};
 
 export const TRACK_SEGMENTS = {
   // Straight segment - no curve, flat
@@ -12,28 +20,27 @@ export const TRACK_SEGMENTS = {
     height: () => 0
   }),
 
-  // Natural gentle curves with variation
-  CURVE_GENTLE_LEFT: (length, intensity = -60, variation = 0.3) => ({
+  // Long highway sweepers with zero-slope entry/exit.
+  CURVE_GENTLE_LEFT: (length, intensity = -60, variation = 0) => ({
     type: 'curve_gentle_left', 
     length,
     curve: (t) => {
       if (t < 0 || t > length) return 0; // Return 0 for out of bounds
       const progress = t / length;
-      // Add natural variation to make curves less uniform
-      const baseIntensity = intensity * (1 + Math.sin(progress * Math.PI * 3) * variation);
-      return baseIntensity * Math.sin(progress * Math.PI);
+      const variationScale = 1 + Math.sin(progress * Math.PI * 2) * variation;
+      return intensity * variationScale * smoothPulse(progress);
     },
     height: () => 0
   }),
 
-  CURVE_GENTLE_RIGHT: (length, intensity = 60, variation = 0.3) => ({
+  CURVE_GENTLE_RIGHT: (length, intensity = 60, variation = 0) => ({
     type: 'curve_gentle_right',
     length, 
     curve: (t) => {
       if (t < 0 || t > length) return 0; // Return 0 for out of bounds
       const progress = t / length;
-      const baseIntensity = intensity * (1 + Math.sin(progress * Math.PI * 3) * variation);
-      return baseIntensity * Math.sin(progress * Math.PI);
+      const variationScale = 1 + Math.sin(progress * Math.PI * 2) * variation;
+      return intensity * variationScale * smoothPulse(progress);
     },
     height: () => 0
   }),
@@ -45,8 +52,9 @@ export const TRACK_SEGMENTS = {
     curve: (t) => {
       if (t < 0 || t > length) return 0; // Return 0 for out of bounds
       const progress = t / length;
-      const intensityAtPoint = startIntensity + (endIntensity - startIntensity) * progress;
-      return intensityAtPoint * Math.sin(progress * Math.PI);
+      const easedProgress = smootherStep(progress);
+      const intensityAtPoint = startIntensity + (endIntensity - startIntensity) * easedProgress;
+      return intensityAtPoint * smoothPulse(progress);
     },
     height: () => 0
   }),
@@ -57,8 +65,9 @@ export const TRACK_SEGMENTS = {
     curve: (t) => {
       if (t < 0 || t > length) return 0; // Return 0 for out of bounds
       const progress = t / length;
-      const intensityAtPoint = startIntensity + (endIntensity - startIntensity) * progress;
-      return intensityAtPoint * Math.sin(progress * Math.PI);
+      const easedProgress = smootherStep(progress);
+      const intensityAtPoint = startIntensity + (endIntensity - startIntensity) * easedProgress;
+      return intensityAtPoint * smoothPulse(progress);
     },
     height: () => 0
   }),
@@ -70,10 +79,16 @@ export const TRACK_SEGMENTS = {
     curve: (t) => {
       if (t < 0 || t > length) return 0; // Return 0 for out of bounds
       const progress = t / length;
-      // Create asymmetric S-curve that feels more natural
-      const leftPart = Math.sin(progress * Math.PI * 2) * intensity;
-      const rightPart = Math.sin((progress + asymmetry) * Math.PI * 2) * intensity * 0.7;
-      return (leftPart + rightPart) * 0.6;
+      const neutralWidth = Math.max(0.12, Math.min(0.28, asymmetry));
+      const firstEnd = 0.5 - neutralWidth * 0.5;
+      const secondStart = 0.5 + neutralWidth * 0.5;
+      if (progress < firstEnd) {
+        return intensity * smoothPulse(progress / firstEnd);
+      }
+      if (progress > secondStart) {
+        return -intensity * 0.82 * smoothPulse((progress - secondStart) / (1 - secondStart));
+      }
+      return 0;
     },
     height: () => 0
   }),
@@ -156,27 +171,8 @@ export const TRACK_SEGMENTS = {
   })
 };
 
-// Test curve functions immediately
-console.log('Testing TRACK_SEGMENTS...');
-const testStraight = TRACK_SEGMENTS.STRAIGHT(100);
-const testCurve = TRACK_SEGMENTS.CURVE_GENTLE_RIGHT(100, 180, 0.1);
-
-console.log('Straight at t=50:', testStraight.curve(50)); // Should be 0
-console.log('Curve at t=50:', testCurve.curve(50)); // Should be 180
-console.log('Curve at t=25:', testCurve.curve(25)); // Should be ~127
-console.log('Curve at t=75:', testCurve.curve(75)); // Should be ~127
-
-// Test actual track generation (moved to after initialization)
-function testTrackGeneration() {
-  console.log('Testing track generation...');
-  const coastalTrack = TRACKS.COASTAL;
-  console.log('Coastal track segments:', coastalTrack.segments.length);
-  coastalTrack.segments.slice(0, 5).forEach((seg, i) => {
-    console.log(`Segment ${i}: ${seg.type} length=${seg.length} curve(50)=${seg.curve(50)}`);
-  });
-}
-
-// NEW APPROACH: Pre-calculated track paths for perfect minimap sync
+// Historical path authoring experiment. Kept as compatibility data only; the
+// live road renderer reads TRACKS below.
 export const TRACK_PATHS = {
   // Pacific Coast Highway - True highway experience with massive straightaways
   PACIFIC_COAST: {
@@ -351,59 +347,77 @@ function getCurveFromPath(distanceLookup, distance, lookAhead = 500) {
   return Math.max(-200, Math.min(200, curvature));
 }
 
-// Legacy track system - kept for reference but not used
+// Legacy track system - kept for reference but not used by gameplay
 export const TRACKS_V2 = {
   // This is no longer used - the main TRACKS object handles everything now
 };
 
 // Minimap helpers removed
 
-// Debug function to test the new system
-window.testPathSystem = () => {
-  console.log('=== TESTING NEW PATH SYSTEM ===');
-  
-  const pathData = createDistanceLookup(TRACK_PATHS.SIMPLE_OVAL.points);
-  console.log(`Total path length: ${pathData.totalDistance.toFixed(1)} units`);
-  
-  // Test positions at various distances
-  for (let dist = 0; dist < pathData.totalDistance; dist += pathData.totalDistance / 8) {
-    const pos = getPositionAtDistance(pathData, dist);
-    const curve = getCurveFromPath(pathData, dist);
-    console.log(`Distance ${dist.toFixed(0)}: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}) curve: ${curve.toFixed(1)}`);
-  }
-};
+if (typeof window !== 'undefined') {
+  window.testPathSystem = () => {
+    console.log('=== LEGACY PATH SYSTEM SAMPLE (NON-LIVE) ===');
 
-// Simplified track layouts
+    const pathData = createDistanceLookup(TRACK_PATHS.PACIFIC_COAST.points);
+    console.log(`Total path length: ${pathData.totalDistance.toFixed(1)} units`);
+
+    for (let dist = 0; dist < pathData.totalDistance; dist += pathData.totalDistance / 8) {
+      const pos = getPositionAtDistance(pathData, dist);
+      const curve = getCurveFromPath(pathData, dist);
+      console.log(`Distance ${dist.toFixed(0)}: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}) curve: ${curve.toFixed(1)}`);
+    }
+  };
+}
+
+// Live segment-based track layouts
 // Only Tropical and Coastal remain
 export const TRACKS = {
   TROPICAL: {
     name: 'Tropical Paradise Highway',
     segments: [
-      // Target ~60s at ~65u/s average speed => ~3900-4200 units
-      // Keep tropical mostly straight for cruising feel
-      TRACK_SEGMENTS.STRAIGHT(2200),
-      TRACK_SEGMENTS.CURVE_GENTLE_RIGHT(400, 12, 0.12),
-      TRACK_SEGMENTS.STRAIGHT(1400),
+      TRACK_SEGMENTS.STRAIGHT(6500),
+      TRACK_SEGMENTS.HILL_UP(4400, 105),
+      TRACK_SEGMENTS.STRAIGHT(7000),
+      TRACK_SEGMENTS.CURVE_GENTLE_RIGHT(5400, 24),
+      TRACK_SEGMENTS.STRAIGHT(9000),
+      TRACK_SEGMENTS.HILL_DOWN(4400, -115),
+      TRACK_SEGMENTS.STRAIGHT(5200),
+      TRACK_SEGMENTS.CURVE_GENTLE_LEFT(5200, -22),
+      TRACK_SEGMENTS.STRAIGHT(4200),
     ]
   },
 
   COASTAL: {
     name: 'Pacific Coast Highway',
     segments: [
-      // Target ~90s at ~65u/s => ~5850-6200 units
-      // Keep coastal varied but compact
-      TRACK_SEGMENTS.STRAIGHT(800),
-      TRACK_SEGMENTS.CURVE_GENTLE_RIGHT(500, 12, 0.12),
-      TRACK_SEGMENTS.STRAIGHT(400),
+      TRACK_SEGMENTS.STRAIGHT(6000),
+      TRACK_SEGMENTS.CURVE_PROGRESSIVE_RIGHT(6800, 28, 40),
+      TRACK_SEGMENTS.STRAIGHT(9000),
+      TRACK_SEGMENTS.HILL_UP(5600, 165),
+      TRACK_SEGMENTS.STRAIGHT(6000),
+      TRACK_SEGMENTS.CURVE_GENTLE_LEFT(6600, -38),
+      TRACK_SEGMENTS.STRAIGHT(9000),
+      TRACK_SEGMENTS.HILL_DOWN(5400, -180),
+      TRACK_SEGMENTS.STRAIGHT(6000),
+      TRACK_SEGMENTS.CURVE_GENTLE_RIGHT(6400, 34),
+      TRACK_SEGMENTS.STRAIGHT(2200)
+    ]
+  },
 
-      TRACK_SEGMENTS.HILL_UP(600, 20),
-      TRACK_SEGMENTS.STRAIGHT(600),
-      TRACK_SEGMENTS.CURVE_GENTLE_LEFT(500, -15, 0.1),
-
-      TRACK_SEGMENTS.STRAIGHT(900),
-      TRACK_SEGMENTS.HILL_DOWN(600, -15),
-      TRACK_SEGMENTS.S_CURVE_NATURAL(500, 12, 0.1),
-      TRACK_SEGMENTS.STRAIGHT(700)
+  DESERT: {
+    name: 'Sonoran Canyon',
+    segments: [
+      TRACK_SEGMENTS.STRAIGHT(6000),
+      TRACK_SEGMENTS.CURVE_PROGRESSIVE_RIGHT(6800, 22, 34), // tightening right into the canyon mouth
+      TRACK_SEGMENTS.STRAIGHT(7600),
+      TRACK_SEGMENTS.HILL_UP(5400, 150),                     // climb to the rim
+      TRACK_SEGMENTS.BANKED_TURN_LEFT(7400, -30, 50),        // banked canyon sweeper
+      TRACK_SEGMENTS.STRAIGHT(7600),
+      TRACK_SEGMENTS.HILL_DOWN(5400, -165),                  // drop back to the wash
+      TRACK_SEGMENTS.BANKED_TURN_RIGHT(7400, 30, -50),       // banked sweeper the other way
+      TRACK_SEGMENTS.STRAIGHT(7600),
+      TRACK_SEGMENTS.S_CURVE_NATURAL(9000, 22, 0.20),        // flowing S through the rocks
+      TRACK_SEGMENTS.STRAIGHT(3000)
     ]
   }
 };
@@ -426,10 +440,204 @@ export function calculateTrackLength(track) {
   return track.segments.reduce((total, segment) => total + segment.length, 0);
 }
 
-// Helper function to get world position at distance for any track
+const TRACK_SHAPE_DEFAULTS = {
+  curveDeadzone: 0.5,
+  curveClamp: 160,
+  segL: 200,
+  roadW: 4000,
+  camD: 0.2,
+  cameraHeight: 1500,
+  width: 1280,
+  height: 720,
+  lineCount: 70,
+};
+
+function resolveTrack(trackOrKey = 'TROPICAL') {
+  if (trackOrKey && Array.isArray(trackOrKey.segments)) return trackOrKey;
+  if (typeof trackOrKey === 'number') {
+    if (trackOrKey === 1) return TRACKS.COASTAL;
+    if (trackOrKey === 2) return TRACKS.DESERT;
+    return TRACKS.TROPICAL;
+  }
+  const key = String(trackOrKey || 'TROPICAL').toUpperCase();
+  return TRACKS[key] || TRACKS.TROPICAL;
+}
+
+function getSegmentAtDistance(track, distance) {
+  const trackLength = calculateTrackLength(track);
+  const normalized = ((distance % trackLength) + trackLength) % trackLength;
+  let start = 0;
+
+  for (const segment of track.segments) {
+    const end = start + segment.length;
+    if (normalized >= start && normalized < end) {
+      return { segment, localDistance: normalized - start, start, end };
+    }
+    start = end;
+  }
+
+  const segment = track.segments[track.segments.length - 1];
+  return { segment, localDistance: segment.length, start: trackLength - segment.length, end: trackLength };
+}
+
+function getTrackCurveAt(track, distance) {
+  const { segment, localDistance } = getSegmentAtDistance(track, distance);
+  return segment.curve ? segment.curve(localDistance) : 0;
+}
+
+function getTrackHeightAt(track, distance) {
+  const { segment, localDistance } = getSegmentAtDistance(track, distance);
+  return segment.height ? segment.height(localDistance) : 0;
+}
+
+function estimateTrackScreenDrift(track, options = {}) {
+  const cfg = { ...TRACK_SHAPE_DEFAULTS, ...options };
+  const halfWidth = cfg.width / 2;
+  const trackLength = calculateTrackLength(track);
+  const lines = Array.from({ length: cfg.lineCount }, (_, i) => ({
+    z: i * cfg.segL + 270,
+  }));
+  let maxCenterDriftPx = 0;
+  let positionAtMax = 0;
+
+  for (let pos = 0; pos < trackLength; pos += cfg.segL) {
+    const startPos = Math.floor(pos / cfg.segL) % cfg.lineCount;
+    let x = 0;
+    let dx = 0;
+
+    for (let n = startPos; n < startPos + cfg.lineCount; n++) {
+      const line = lines[n % cfg.lineCount];
+      const worldZ = line.z + pos;
+      const camZ = startPos * cfg.segL - (n >= cfg.lineCount ? cfg.lineCount * cfg.segL : 0);
+      const scale = cfg.camD / (line.z - camZ);
+      const centerX = (1 + scale * x) * halfWidth;
+      const drift = Math.abs(centerX - halfWidth);
+
+      if (drift > maxCenterDriftPx) {
+        maxCenterDriftPx = drift;
+        positionAtMax = pos;
+      }
+
+      let curve = getTrackCurveAt(track, worldZ);
+      curve = Math.abs(curve) < cfg.curveDeadzone ? 0 : curve;
+      curve = Math.max(-cfg.curveClamp, Math.min(cfg.curveClamp, curve));
+      x += dx;
+      dx += curve;
+    }
+  }
+
+  return {
+    maxCenterDriftPx: Number(maxCenterDriftPx.toFixed(2)),
+    positionAtMax: Math.round(positionAtMax),
+  };
+}
+
+export function getTrackShapeReport(trackOrKey = 'TROPICAL', options = {}) {
+  const track = resolveTrack(trackOrKey);
+  const cfg = { ...TRACK_SHAPE_DEFAULTS, ...options };
+  const trackLength = calculateTrackLength(track);
+  let currentDistance = 0;
+  let maxAbsCurve = 0;
+  let maxCurve = -Infinity;
+  let minCurve = Infinity;
+  let maxAbsHeight = 0;
+  let maxHeight = -Infinity;
+  let minHeight = Infinity;
+  let visibleCurveSamples = 0;
+  let totalSamples = 0;
+  let positiveCurveSamples = 0;
+  let negativeCurveSamples = 0;
+  let maxCurveDeltaPerSample = 0;
+
+  const segments = track.segments.map((segment, index) => {
+    const samples = Math.max(24, Math.ceil(segment.length / 200));
+    let segmentMaxAbsCurve = 0;
+    let segmentMaxAbsHeight = 0;
+    let segmentVisibleCurveSamples = 0;
+    let segmentPositiveCurveSamples = 0;
+    let segmentNegativeCurveSamples = 0;
+    let segmentMaxCurveDeltaPerSample = 0;
+    let previousCurve = null;
+
+    for (let i = 0; i <= samples; i++) {
+      const local = segment.length * (i / samples);
+      const curve = segment.curve ? segment.curve(local) : 0;
+      const height = segment.height ? segment.height(local) : 0;
+
+      maxAbsCurve = Math.max(maxAbsCurve, Math.abs(curve));
+      maxCurve = Math.max(maxCurve, curve);
+      minCurve = Math.min(minCurve, curve);
+      maxAbsHeight = Math.max(maxAbsHeight, Math.abs(height));
+      maxHeight = Math.max(maxHeight, height);
+      minHeight = Math.min(minHeight, height);
+      segmentMaxAbsCurve = Math.max(segmentMaxAbsCurve, Math.abs(curve));
+      segmentMaxAbsHeight = Math.max(segmentMaxAbsHeight, Math.abs(height));
+      if (previousCurve != null) {
+        const curveDelta = Math.abs(curve - previousCurve);
+        maxCurveDeltaPerSample = Math.max(maxCurveDeltaPerSample, curveDelta);
+        segmentMaxCurveDeltaPerSample = Math.max(segmentMaxCurveDeltaPerSample, curveDelta);
+      }
+      previousCurve = curve;
+
+      if (Math.abs(curve) >= cfg.curveDeadzone) {
+        visibleCurveSamples++;
+        segmentVisibleCurveSamples++;
+      }
+      if (curve > cfg.curveDeadzone) {
+        positiveCurveSamples++;
+        segmentPositiveCurveSamples++;
+      }
+      if (curve < -cfg.curveDeadzone) {
+        negativeCurveSamples++;
+        segmentNegativeCurveSamples++;
+      }
+      totalSamples++;
+    }
+
+    const summary = {
+      index: index + 1,
+      type: segment.type,
+      start: currentDistance,
+      end: currentDistance + segment.length,
+      length: segment.length,
+      maxAbsCurve: Number(segmentMaxAbsCurve.toFixed(2)),
+      maxAbsHeight: Number(segmentMaxAbsHeight.toFixed(2)),
+      maxCurveDeltaPerSample: Number(segmentMaxCurveDeltaPerSample.toFixed(2)),
+      visibleCurvePercent: Number(((segmentVisibleCurveSamples / (samples + 1)) * 100).toFixed(1)),
+      hasPositiveCurve: segmentPositiveCurveSamples > 0,
+      hasNegativeCurve: segmentNegativeCurveSamples > 0,
+    };
+
+    currentDistance += segment.length;
+    return summary;
+  });
+
+  return {
+    name: track.name,
+    trackLength,
+    horizonDistance: cfg.lineCount * cfg.segL,
+    horizonRatio: Number((trackLength / (cfg.lineCount * cfg.segL)).toFixed(2)),
+    maxAbsCurve: Number(maxAbsCurve.toFixed(2)),
+    minCurve: Number(minCurve.toFixed(2)),
+    maxCurve: Number(maxCurve.toFixed(2)),
+    maxAbsHeight: Number(maxAbsHeight.toFixed(2)),
+    minHeight: Number(minHeight.toFixed(2)),
+    maxHeight: Number(maxHeight.toFixed(2)),
+    maxCurveDeltaPerSample: Number(maxCurveDeltaPerSample.toFixed(2)),
+    visibleCurvePercent: Number(((visibleCurveSamples / totalSamples) * 100).toFixed(1)),
+    hasPositiveCurve: positiveCurveSamples > 0,
+    hasNegativeCurve: negativeCurveSamples > 0,
+    estimatedScreenDrift: estimateTrackScreenDrift(track, cfg),
+    segments,
+  };
+}
+
+// Compatibility helper for old minimap/debug callers. Gameplay does not use it.
 export function getWorldPositionAtDistance(track, distance) {
-  // Simplified for straight-line tracks - no complex path calculations needed
-  return { x: 0, y: 0 };
+  if (track?.pathData) {
+    return getPositionAtDistance(track.pathData, distance);
+  }
+  return { x: distance, y: 0 };
 }
 
 // Export TRACKS to window for minimap access
@@ -437,14 +645,25 @@ if (typeof window !== 'undefined') {
   window.TRACKS = TRACKS;
 }
 
-// Simplified debug functions for straight-line tracks
+// Browser debug helpers for the live segment tracks
 if (typeof window !== 'undefined') {
-  // Debug function to test track lengths
   window.testTrackLengths = () => {
-    console.log('=== SIMPLIFIED TRACK LENGTHS ===');
+    console.log('=== LIVE TRACK LENGTHS ===');
     Object.entries(TRACKS).forEach(([levelName, track]) => {
       console.log(`${levelName}: ${calculateTrackLength(track)} units (${track.name})`);
     });
+  };
+
+  window.debugTrackShape = (levelIndex = 0) => {
+    const report = getTrackShapeReport(levelIndex, {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      lineCount: window.innerWidth > 768 ? 70 : 50,
+    });
+    console.log('=== LIVE TRACK SHAPE ===');
+    console.log(report);
+    console.table(report.segments);
+    return report;
   };
   
   // Quick level switching for testing

@@ -1,5 +1,7 @@
 import { createAudioEffectsChain, connectEffectsChain } from './AudioEffects.js';
 
+const MAX_SFX_DURATION_SECONDS = 3.5;
+
 export class Audio {
   constructor() {
     this.audioCtx = null;
@@ -82,9 +84,10 @@ export class Audio {
       this.initialized = true;
       console.log('Audio context initialized successfully');
       
-      // Start playing menu music after initialization
+      // Preload menu music, but do not auto-play it. Gameplay can begin before
+      // the async preload chain completes, so auto-play here can layer menu music
+      // over the driving bed.
       await this.loadSound('menu', 'audio/menu.mp3');
-      await this.playMenuMusic();
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
@@ -245,31 +248,98 @@ export class Audio {
     }, 100);
   }
 
-  async play(name, pitch = 1) {
-    if (!this.initialized) {
-      // Don't auto-initialize here - just silently return if not ready
-      return;
-    }
+  play(name, pitch = 1) {
+    if (!this.initialized || !this.audioCtx || !this.files[name]) return;
 
-    if (!this.audioCtx || !this.files[name]) {
-      // Silently return instead of console warning for better UX
-      return;
-    }
-
-    // Resume audio context if suspended (browser autoplay policy)
-    if (this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume();
-    }
+    // Keep the context alive WITHOUT blocking: a source started on a suspended context is
+    // queued and plays on resume, so kick resume (fire-and-forget) and create the source
+    // immediately. Awaiting resume here used to yield mid-call and could drop rapid SFX.
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
 
     try {
+      const buffer = this.files[name];
+      if (buffer.duration > MAX_SFX_DURATION_SECONDS) return;
+
       const source = this.audioCtx.createBufferSource();
-      source.buffer = this.files[name];
+      source.buffer = buffer;
       source.playbackRate.value = pitch;
       source.connect(this.sfxGain);
       source.start();
-      console.log(`Playing sound: ${name}`);
     } catch (error) {
       console.error(`Error playing sound ${name}:`, error);
+    }
+  }
+
+  // Synthesized boost "whoosh": a band-passed noise sweep. No asset file needed.
+  playWhoosh() {
+    if (!this.initialized || !this.audioCtx) return;
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+    try {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+      const dur = 0.5;
+      const bufferSize = Math.floor(ctx.sampleRate * dur);
+      const noiseBuf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.Q.value = 0.8;
+      band.frequency.setValueAtTime(400, now);
+      band.frequency.exponentialRampToValueAtTime(2600, now + dur * 0.7);
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.34, now + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+      noise.connect(band);
+      band.connect(g);
+      g.connect(this.sfxGain);
+      noise.start(now);
+      noise.stop(now + dur);
+    } catch (error) {
+      console.error('Error playing whoosh:', error);
+    }
+  }
+
+  // Synthesized rising triad whose top note climbs with the combo tier.
+  playComboTone(level = 2) {
+    if (!this.initialized || !this.audioCtx) return;
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+    try {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+      const base = 440;
+      const semis = [0, 4, 7]; // major triad
+      const climb = Math.min(12, (level - 1) * 2);
+      semis.forEach((s, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = base * Math.pow(2, (s + climb) / 12);
+        const t = now + i * 0.05;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.13, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+        osc.connect(g);
+        g.connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.24);
+      });
+    } catch (error) {
+      console.error('Error playing combo tone:', error);
+    }
+  }
+
+  // Cheap per-frame call: nudge the context back to running if the browser suspended it
+  // (focus loss, idle, autoplay policy) so the next SFX isn't silently dropped.
+  keepAlive() {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
     }
   }
 

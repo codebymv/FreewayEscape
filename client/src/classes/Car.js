@@ -3,8 +3,8 @@ export class Car {
     this.pos = pos;
     this.type = type;
     this.lane = lane;
-    this.initialLane = lane; // Lock lane for entire level (never changes)
-    // Cars are STATIONARY in world space - player drives past them
+    this.initialLane = lane;
+    // DOM sprite wrapper only. TrafficWorld owns gameplay position and lifecycle.
     
     // Visual telegraph: track spawn time for fade-in (reduces snap/pop on respawn/recovery)
     this.spawnTime = spawnTime;

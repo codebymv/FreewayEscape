@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" shape-rendering="crispEdges">
+  <g fill="#3a5e34" stroke="#2c4a28" stroke-width="2">
+    <!-- arms (drawn first, behind trunk) -->
+    <path d="M40 66 L18 66 L18 38" fill="none" stroke="#3a5e34" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M40 54 L60 54 L60 30" fill="none" stroke="#3a5e34" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- trunk -->
+    <rect x="33" y="10" width="15" height="110" rx="7"/>
+  </g>
+  <!-- rib highlights -->
+  <g stroke="#4e7a44" stroke-width="1.5" opacity="0.8">
+    <line x1="40" y1="18" x2="40" y2="116"/>
+  </g>
+</svg>

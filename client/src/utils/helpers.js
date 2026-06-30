@@ -14,7 +14,10 @@ Number.prototype.clamp = function (min, max) {
 };
 
 // Utility functions
-export const timestamp = () => new Date().getTime();
+// Monotonic high-resolution clock. All call sites use this as a delta, so the
+// non-epoch base is irrelevant; performance.now() avoids a per-frame Date allocation
+// and is immune to system-clock changes.
+export const timestamp = () => performance.now();
 export const accelerate = (v, accel, dt) => v + accel * dt;
 export const isCollide = (x1, w1, x2, w2) => (x1 - x2) ** 2 <= (w2 + w1) ** 2;
 
@@ -28,6 +31,23 @@ export function randomProperty(obj) {
 }
 
 export function drawQuad(element, layer, color, x1, y1, w1, x2, y2, w2) {
+  if (
+    !element ||
+    !Number.isFinite(x1) ||
+    !Number.isFinite(y1) ||
+    !Number.isFinite(w1) ||
+    !Number.isFinite(x2) ||
+    !Number.isFinite(y2) ||
+    !Number.isFinite(w2) ||
+    w1 <= 0 ||
+    w2 <= 0 ||
+    y1 <= y2 + 0.5
+  ) {
+    if (element) element.style.display = 'none';
+    return false;
+  }
+
+  element.style.display = 'block';
   element.style.zIndex = layer;
   element.style.background = color;
   element.style.top = y2 + `px`;
@@ -39,6 +59,7 @@ export function drawQuad(element, layer, color, x1, y1, w1, x2, y2, w2) {
   element.style.clipPath = `polygon(${leftOffset}px 0, ${
     leftOffset + w2
   }px 0, 66.66% 100%, 33.33% 100%)`;
+  return true;
 }
 
 export function sleep(ms) {
